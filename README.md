@@ -137,6 +137,57 @@ IAM trust policy.
 
 ---
 
+## If a step fails: automatic rollback
+
+Neither script leaves half-built infrastructure behind. Every resource a run
+**actually creates** registers an undo action; if any later step throws, the run
+stops immediately and unwinds them in reverse (LIFO) order before exiting
+non-zero.
+
+Reverse order matters because AWS refuses to delete a resource that still has
+dependents — an access key is deleted before its user, a policy is detached
+before the role it's attached to is deleted, and the Snowflake stage is dropped
+before the storage integration it depends on.
+
+**Only what this run created is undone.** Anything that already existed is
+detected up front (including whether a policy attachment was already in place)
+and is left completely untouched. Re-running against a partially-provisioned
+account will never delete infrastructure it didn't make.
+
+Other guarantees:
+
+- **Ctrl-C rolls back too.** `SIGINT`/`SIGTERM` trigger the same unwind, so
+  interrupting during one of the propagation waits doesn't strand resources.
+- **Cleanup is best-effort and never silent.** If one undo fails, the rest are
+  still attempted and the run prints an explicit
+  `Rollback incomplete — manually check: …` list. Nothing is swallowed.
+- **A successful run is never torn down** — the stack is disarmed once the
+  report is written.
+- **The two scripts share no rollback state.** A failure in one has no effect on
+  the other.
+
+---
+
+## IAM propagation waits
+
+IAM is eventually consistent: a freshly created role/policy — or a trust policy
+that was just patched — isn't reliably usable by other AWS services for a few
+seconds. Rather than guess a fixed sleep, `setup:integration` polls a
+read-your-write check until it's confirmed, then adds a short fixed buffer:
+
+| After | Confirms via | Poll | Buffer |
+| --- | --- | --- | --- |
+| Creating the IAM policy/role | `GetPolicy` / `GetRole` succeed | up to 20s | 15s |
+| Patching the role trust policy | `GetRole` read-back actually contains Snowflake's IAM user ARN + external id | up to 30s | 20s |
+
+Both are **skipped entirely** when nothing was newly created, so a re-run
+against an already-correct account stays fast. Expect a first-time run to spend
+roughly 35–60s in these waits. If a poll times out it warns and proceeds rather
+than failing — the verification COPY's own retry/backoff is the final safety
+net.
+
+---
+
 ## Bucket ownership (decide for zap-prod)
 
 By default `setup:integration` **creates** the bucket (matching the tested
@@ -149,10 +200,15 @@ IaC. This is the one place to consciously choose before a prod run.
 ## Troubleshooting
 
 - **Test COPY fails with Access Denied on first run.** Expected occasionally — IAM
-  trust-policy changes take a few seconds to propagate. The script retries with
-  backoff; if it still fails, re-check the role's trust policy carries Snowflake's
-  `STORAGE_AWS_IAM_USER_ARN` and the `sts:ExternalId` condition (both from
-  `DESC INTEGRATION`).
+  trust-policy changes take a few seconds to propagate. The script already waits
+  for the trust-policy read-back (see *IAM propagation waits*) and then retries
+  with backoff; if it still fails, re-check the role's trust policy carries
+  Snowflake's `STORAGE_AWS_IAM_USER_ARN` and the `sts:ExternalId` condition (both
+  from `DESC INTEGRATION`).
+- **A run failed — do I need to clean anything up?** Normally no; the script rolls
+  back everything it created (see *If a step fails: automatic rollback*). Only if
+  the output ends with `Rollback incomplete — manually check: …` do you need to
+  delete the named resources by hand.
 - **`BucketAlreadyExists`.** Bucket names are globally unique across all AWS
   accounts — pick another `EXPORT_S3_BUCKET`. (`BucketAlreadyOwnedByYou` = success.)
 - **Snowflake "insufficient privileges to operate on account".** Your

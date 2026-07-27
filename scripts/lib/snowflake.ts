@@ -1,6 +1,13 @@
 import snowflake from "snowflake-sdk";
 import type { IntegrationEnv } from "./env";
 
+/** Accepts either a raw PEM string or the whole PEM base64-encoded (common when squeezing a multi-line key onto one .env line). */
+export function decodePrivateKey(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("-----BEGIN")) return trimmed;
+  return Buffer.from(trimmed, "base64").toString("utf8");
+}
+
 export interface SnowflakeConnection {
   connection: snowflake.Connection;
   runQuery: (sqlText: string) => Promise<Record<string, unknown>[]>;
@@ -19,7 +26,10 @@ export function connect(env: IntegrationEnv): Promise<SnowflakeConnection> {
 
   if (env.SNOWFLAKE_PRIVATE_KEY?.trim()) {
     options.authenticator = "SNOWFLAKE_JWT";
-    options.privateKey = env.SNOWFLAKE_PRIVATE_KEY;
+    options.privateKey = decodePrivateKey(env.SNOWFLAKE_PRIVATE_KEY);
+    if (env.SNOWFLAKE_PRIVATE_KEY_PASSPHRASE?.trim()) {
+      options.privateKeyPass = env.SNOWFLAKE_PRIVATE_KEY_PASSPHRASE;
+    }
   } else {
     options.password = env.SNOWFLAKE_PASSWORD;
   }

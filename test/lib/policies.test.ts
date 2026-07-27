@@ -4,7 +4,7 @@ import {
   finalRoleTrustPolicy,
   initialRoleTrustPolicy,
   integrationRolePolicy,
-} from "./policies";
+} from "../../scripts/lib/policies";
 
 describe("integrationRolePolicy (artifact A)", () => {
   test("matches the canonical tested policy verbatim, params substituted", () => {

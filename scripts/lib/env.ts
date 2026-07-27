@@ -9,6 +9,14 @@ function fail(errors: z.ZodError): never {
 
 const nonEmpty = z.string().min(1, "must not be empty");
 
+// Snowflake unquoted identifiers only allow letters/digits/underscore and
+// can't start with a digit — a hyphen (or anything else) makes the SQL
+// parser read it as an expression (e.g. "a-b-c" as subtraction), not a name.
+const snowflakeIdentifier = nonEmpty.refine(
+  (v) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(v),
+  "must be a valid Snowflake unquoted identifier — letters/digits/underscore only, can't start with a digit or contain '-'",
+);
+
 const awsBootstrapSchema = {
   AWS_ACCESS_KEY_ID: nonEmpty,
   AWS_SECRET_ACCESS_KEY: nonEmpty,
@@ -32,12 +40,13 @@ const integrationEnvSchema = z
     SNOWFLAKE_USERNAME: nonEmpty,
     SNOWFLAKE_PASSWORD: z.string().optional(),
     SNOWFLAKE_PRIVATE_KEY: z.string().optional(),
+    SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: z.string().optional(),
     SNOWFLAKE_ROLE: nonEmpty,
     SNOWFLAKE_WAREHOUSE: nonEmpty,
     SNOWFLAKE_DATABASE: nonEmpty,
     SNOWFLAKE_SCHEMA: nonEmpty,
-    SF_STORAGE_INTEGRATION_NAME: nonEmpty,
-    SF_STAGE_NAME: nonEmpty,
+    SF_STORAGE_INTEGRATION_NAME: snowflakeIdentifier,
+    SF_STAGE_NAME: snowflakeIdentifier,
     AWS_STORAGE_ROLE_NAME: nonEmpty,
     AWS_STORAGE_POLICY_NAME: nonEmpty,
   })

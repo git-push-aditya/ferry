@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { loadBackendEnv, loadIntegrationEnv } from "./env";
+import { loadBackendEnv, loadIntegrationEnv } from "../../scripts/lib/env";
 
 const VALID_INTEGRATION_ENV = {
   AWS_ACCESS_KEY_ID: "AKIA_TEST",
@@ -103,6 +103,33 @@ describe("loadIntegrationEnv", () => {
     setEnv({ ...VALID_INTEGRATION_ENV, SNOWFLAKE_WAREHOUSE: "" });
     expect(() => loadIntegrationEnv()).toThrow();
     expect(exitCode).toBe(1);
+  });
+
+  test("rejects a hyphen in SF_STORAGE_INTEGRATION_NAME — Snowflake reads '-' as subtraction, not a name", () => {
+    setEnv({ ...VALID_INTEGRATION_ENV, SF_STORAGE_INTEGRATION_NAME: "my-integration" });
+    expect(() => loadIntegrationEnv()).toThrow();
+    expect(exitCode).toBe(1);
+  });
+
+  test("rejects a hyphen in SF_STAGE_NAME", () => {
+    setEnv({ ...VALID_INTEGRATION_ENV, SF_STAGE_NAME: "my-stage" });
+    expect(() => loadIntegrationEnv()).toThrow();
+    expect(exitCode).toBe(1);
+  });
+
+  test("rejects an identifier starting with a digit", () => {
+    setEnv({ ...VALID_INTEGRATION_ENV, SF_STAGE_NAME: "1stage" });
+    expect(() => loadIntegrationEnv()).toThrow();
+    expect(exitCode).toBe(1);
+  });
+
+  test("accepts underscores in SF_STORAGE_INTEGRATION_NAME / SF_STAGE_NAME", () => {
+    setEnv({
+      ...VALID_INTEGRATION_ENV,
+      SF_STORAGE_INTEGRATION_NAME: "testing_script_integration_sf",
+      SF_STAGE_NAME: "testing_script_stage_sf",
+    });
+    expect(() => loadIntegrationEnv()).not.toThrow();
   });
 });
 

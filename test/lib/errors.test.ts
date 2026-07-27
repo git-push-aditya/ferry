@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { describeAwsError, isAssumeRoleDenied } from "./errors";
+import { describeAwsError, isAssumeRoleDenied } from "../../scripts/lib/errors";
 
 describe("describeAwsError", () => {
   test("maps AccessDenied to an actionable message", () => {
@@ -10,8 +10,8 @@ describe("describeAwsError", () => {
     expect(describeAwsError({ name: "BucketAlreadyExists" })).toContain("EXPORT_S3_BUCKET");
   });
 
-  test("maps NoSuchEntity to an actionable message", () => {
-    expect(describeAwsError({ name: "NoSuchEntity" })).toContain("does not exist");
+  test("maps NoSuchEntityException to an actionable message", () => {
+    expect(describeAwsError({ name: "NoSuchEntityException" })).toContain("does not exist");
   });
 
   test("falls back to name + http status for unrecognized errors", () => {
