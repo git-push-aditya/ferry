@@ -1,0 +1,5 @@
+node_modules/
+.env
+.env.backend
+snowflake.log
+output/

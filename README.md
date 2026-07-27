@@ -54,10 +54,9 @@ bun install
 ```
 
 > **snowflake-sdk under bun:** `snowflake-sdk` is a Node driver. The integration
-> script runs a `SELECT 1` self-check on connect. If bun's node-compat trips it
-> up, the fallback is to keep bun for package management + `setup:backend`, and run
-> `setup:integration` under Node. Whichever path was chosen is documented here by
-> the setup script author.
+> script runs a `SELECT 1` self-check on connect (`scripts/lib/snowflake.ts`).
+> Verified: `snowflake-sdk` connects and executes queries cleanly under bun 1.3 —
+> no Node fallback is needed. Both scripts run under `bun run`.
 
 ---
 
@@ -83,17 +82,32 @@ bun run setup:integration -- --dry-run
 bun run setup:integration          # provision + verify
 
 bun run setup:backend -- --dry-run
-bun run setup:backend              # creates user + prints the access key ONCE
+bun run setup:backend              # creates user + writes a report to ./output
 ```
 
 ### Flags
 
 - `--dry-run` (both) — validate + print the plan, change nothing.
 - `--write-env` (`setup:backend`) — also append the generated key to
-  `./.env.backend` (`chmod 0600`). Otherwise the key is only printed.
+  `./.env.backend` (`chmod 0600`).
 
-> The generated secret access key is shown **once**, stdout only, never logged. If
-> you lose it, delete the key in IAM and re-run to mint a new one.
+### Output reports
+
+Both scripts write a markdown report to `./output/` (created if missing,
+gitignored) instead of printing secrets to stdout:
+
+- `setup:integration` → `output/<SF_STORAGE_INTEGRATION_NAME>-<date>.md` — S3
+  bucket/prefix, the IAM policy/role names + ARNs, the trust-policy principal
+  and external id, and the Snowflake integration + stage names.
+- `setup:backend` → `output/<BACKEND_IAM_USER_NAME>-<date>.md` — the IAM
+  user/policy names + ARNs and the generated `AWS_ACCESS_KEY_ID` /
+  `AWS_SECRET_ACCESS_KEY` pair.
+
+Every report file is `chmod 0600`. Both contain sensitive material (an
+external id and/or a live access key) — treat `./output/` like `.env`: never
+commit it, and rotate the affected credential if a file ever leaks. Only the
+non-secret `AWS_ACCESS_KEY_ID` is echoed to stdout for a quick sanity check;
+the secret itself is written to the report only.
 
 ---
 
