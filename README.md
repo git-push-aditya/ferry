@@ -226,3 +226,4 @@ made with a throwaway trust policy, the integration is created, its identity is
 read back via `DESC INTEGRATION`, and only then is the trust policy patched to its
 real value. Getting that order right is the whole reason the manual runbook was
 error-prone.
+# ferry
