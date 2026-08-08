@@ -1,11 +1,13 @@
 {
-  "name": "snowflake-s3-integration-setup",
+  "name": "ferry",
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "setup:integration": "bun scripts/setup-snowflake-s3-integration.ts",
-    "setup:backend": "bun scripts/setup-backend-s3-user.ts",
-    "test": "bun test"
+    "ferry": "bun bin/ferry.ts",
+    "setup:integration": "bun bin/ferry.ts snowflake/s3-storage-integration",
+    "setup:backend": "bun bin/ferry.ts aws/s3-backend-access",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@aws-sdk/client-iam": "^3.906.0",

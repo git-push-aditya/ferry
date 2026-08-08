@@ -1,5 +1,13 @@
 node_modules/
+
+# Credentials — the root .env is the only place they live.
 .env
 .env.backend
+
+# Params — one per integration folder. The .env.example beside each is committed.
+integrations/*/*/.env
+
 snowflake.log
+
+# Reports (chmod 0600, may reference sensitive values).
 output/
