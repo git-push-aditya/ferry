@@ -1,6 +1,6 @@
 node_modules/
 
-# Credentials — the root .env is the only place they live.
+# Credentials.
 .env
 .env.backend
 
@@ -9,5 +9,5 @@ integrations/*/*/.env
 
 snowflake.log
 
-# Reports (chmod 0600, may reference sensitive values).
+# Reports (chmod 0600, may contain masked secret-derived values and resource identifiers).
 output/

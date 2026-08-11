@@ -1,4 +1,4 @@
-# `snowflake/s3-storage-integration`
+# `snowflake/create-storage-s3-integration`
 
 Lets Snowflake write query results to S3 as CSV through an external stage, and
 proves it by actually doing so.
@@ -44,7 +44,7 @@ write access; `SNOWFLAKE_ROLE` must be able to `CREATE INTEGRATION` (in practice
 ## Reuses vs creates
 
 - **Bucket — reused if it exists.** The step lives in `src/providers/aws/s3.ts`
-  because `aws/s3-backend-access` needs it too. This integration does **not** own
+  because it is generic shared provider logic. This integration does **not** own
   the bucket: if it already exists and belongs to your account, it is reused and
   **no rollback is registered for it**. Only the run that actually creates the
   bucket may delete it.

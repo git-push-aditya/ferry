@@ -2,6 +2,7 @@ import snowflake from "snowflake-sdk";
 import type { SnowflakeCredentials } from "./credentials";
 
 export const SNOWFLAKE_PROVIDER_ID = "snowflake";
+export type SnowflakeRow = Record<string, unknown>;
 
 /** Accepts either a raw PEM string or the whole PEM base64-encoded (common when squeezing a multi-line key onto one .env line). */
 export function decodePrivateKey(value: string): string {
@@ -12,7 +13,7 @@ export function decodePrivateKey(value: string): string {
 
 export interface SnowflakeConnection {
   connection: snowflake.Connection;
-  runQuery: (sqlText: string) => Promise<Record<string, unknown>[]>;
+  runQuery: (sqlText: string) => Promise<SnowflakeRow[]>;
   close: () => Promise<void>;
 }
 
@@ -45,7 +46,7 @@ export function connect(env: SnowflakeCredentials): Promise<SnowflakeConnection>
         return;
       }
 
-      const runQuery = (sqlText: string): Promise<Record<string, unknown>[]> =>
+      const runQuery = (sqlText: string): Promise<SnowflakeRow[]> =>
         new Promise((res, rej) => {
           conn.execute({
             sqlText,

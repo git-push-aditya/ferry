@@ -12,7 +12,7 @@ import {
 } from "../waits";
 
 /**
- * Artifact C — the step the whole tool exists for.
+ * Artifact C — patch the role's trust policy to Snowflake's real principal.
  *
  * ORDERING: the role's trust policy needs Snowflake's IAM user ARN and external
  * id, but those don't exist until *after* the storage integration is created,

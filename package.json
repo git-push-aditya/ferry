@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "scripts": {
     "ferry": "bun bin/ferry.ts",
-    "setup:integration": "bun bin/ferry.ts snowflake/s3-storage-integration",
-    "setup:backend": "bun bin/ferry.ts aws/s3-backend-access",
+    "setup:integration": "bun bin/ferry.ts snowflake/create-storage-s3-integration",
+    "setup:backend": "bun bin/ferry.ts aws/create-backend-s3-user",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

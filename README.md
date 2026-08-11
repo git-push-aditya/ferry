@@ -64,8 +64,8 @@ need to understand the runbook ferry replaces.
 
 | Integration | Command | What it does |
 | --- | --- | --- |
-| `snowflake/s3-storage-integration` | `bun run setup:integration` | S3 bucket + prefix, IAM policy + role + Snowflake trust policy, storage integration + external stage, and a live `COPY INTO` that verifies a CSV actually lands in S3. |
-| `aws/s3-backend-access` | `bun run setup:backend` | A least-privilege IAM user + access key, verified by a real write/read/delete performed as that user. |
+| `snowflake/create-storage-s3-integration` | `bun run setup:integration` | S3 bucket + prefix, IAM policy + role + Snowflake trust policy, storage integration + external stage, and a live `COPY INTO` that verifies a CSV actually lands in S3. |
+| `aws/create-backend-s3-user` | `bun run setup:backend` | A least-privilege IAM user + access key, verified by a real write/read/delete performed as that user. |
 
 They share no IAM object. The only overlap is the S3 bucket, and neither integration
 owns it.
@@ -103,8 +103,8 @@ ferry/
 │   ├── providers/            # aws/ and snowflake/: credentials, clients, shared helpers
 │   └── handoff/              # empty: Terraform/Ansible emitters are a later task
 ├── integrations/
-│   ├── snowflake/s3-storage-integration/
-│   └── aws/s3-backend-access/
+│   ├── snowflake/create-storage-s3-integration/
+│   └── aws/create-backend-s3-user/
 ├── test/{core,providers,integrations}/
 └── output/                   # 0600 reports - gitignored
 ```
@@ -120,7 +120,7 @@ imports a concrete provider.
 An integration folder is the single source of truth for one integration:
 
 ```
-integrations/snowflake/s3-storage-integration/
+integrations/snowflake/create-storage-s3-integration/
 ├── integration.ts     # the manifest: params, credential kinds, steps, verify, report
 ├── params.ts          # zod schema for this folder's .env
 ├── steps/             # one file per step
@@ -136,7 +136,7 @@ The manifest is just data:
 
 ```ts
 export default defineIntegration<Params>({
-  id: "snowflake/s3-storage-integration",
+  id: "snowflake/create-storage-s3-integration",
   schemaVersion: 1,
   summary: "...",
   params: paramsSchema,          // folder .env, no credentials
@@ -183,7 +183,7 @@ The rules the engine enforces:
   `EXPORT_S3_BUCKET` in their own `.env`; the duplication is the point, because a
   folder has to stand alone.
 - An integration only supplies the credential kinds it declares.
-  `aws/s3-backend-access` declares `["aws"]`, so it never asks for Snowflake.
+  `aws/create-backend-s3-user` declares `["aws"]`, so it never asks for Snowflake.
 - Both `.env` files are gitignored; both `.env.example` files are committed and
   complete.
 
@@ -194,10 +194,10 @@ The rules the engine enforces:
 ```bash
 bun install
 cp .env.example .env                                     # credentials
-cp integrations/snowflake/s3-storage-integration/.env.example \
-   integrations/snowflake/s3-storage-integration/.env     # params
-cp integrations/aws/s3-backend-access/.env.example \
-   integrations/aws/s3-backend-access/.env                # params
+cp integrations/snowflake/create-storage-s3-integration/.env.example \
+   integrations/snowflake/create-storage-s3-integration/.env     # params
+cp integrations/aws/create-backend-s3-user/.env.example \
+   integrations/aws/create-backend-s3-user/.env                # params
 ```
 
 Prerequisites:
@@ -207,7 +207,7 @@ Prerequisites:
 - An **AWS identity** that can create/attach policies, create/update roles and trust
   policies, create users, and create S3 buckets.
 - A **Snowflake role** that can `CREATE INTEGRATION` - in practice `ACCOUNTADMIN`
-  (only for `snowflake/s3-storage-integration`).
+  (only for `snowflake/create-storage-s3-integration`).
 
 > **snowflake-sdk under bun:** `snowflake-sdk` is a Node driver. The
 > `snowflake-connect` step runs a `SELECT 1` self-check on connect. Verified: it
@@ -217,7 +217,7 @@ Prerequisites:
 
 - **Admin bootstrap creds** (root `.env`) - used to *run* ferry. They exist only to
   provision.
-- **Runtime creds** - the access key `aws/s3-backend-access` *generates*. This is the
+- **Runtime creds** - the access key `aws/create-backend-s3-user` *generates*. This is the
   least-privilege key your application uses.
 
 Never ship the admin creds into your app; never widen the runtime user.
@@ -234,7 +234,7 @@ bun run setup:backend -- --dry-run
 bun run setup:backend
 
 bun run ferry                            # lists the integrations it found
-bun run ferry aws/s3-backend-access
+bun run ferry aws/create-backend-s3-user
 ```
 
 `--dry-run` is the only flag. `bin/ferry.ts` is a **placeholder**, not a CLI: real
@@ -268,8 +268,9 @@ conflicted. The commonest cause is an S3 bucket name owned by a different AWS ac
 ### Reports
 
 Written to `output/<name>-<date>.md`, `chmod 0600`, gitignored. Treat `output/` like
-`.env`. The backend integration's generated secret is **masked** in the report and
-printed to stdout exactly once, at the end of the run that created it.
+local sensitive metadata. Reports contain resource identifiers and masked secret-derived
+values. The backend integration's generated secret is **masked** in the report; the full
+secret prints to stdout exactly once, at the end of the run that created it.
 
 ---
 
@@ -361,11 +362,10 @@ retry/backoff is the final safety net.
 ## The permissions are copied from a proven setup
 
 Every IAM policy, trust policy, and SQL statement is reproduced **verbatim** from the
-tested staging integration (see `docs/completeIntegration.md`); only literal names are
-swapped for params. The policy builders live in each integration's `policies/` folder
-and are pinned by tests that compare them field for field. If a permission looks wrong,
-change it in the canonical artifacts - not in the generated code - so the "tested"
-guarantee stays intact.
+canonical tested artifacts; only literal names are swapped for params. The policy
+builders live in each integration's `policies/` folder and are pinned by tests that
+compare them field for field. If a permission looks wrong, change it in the canonical
+artifacts - not in the generated code - so the "tested" guarantee stays intact.
 
 ---
 

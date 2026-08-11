@@ -21,7 +21,7 @@ import { verify } from "./verify";
  * See steps/trust-policy.ts.
  */
 export default defineIntegration<Params>({
-  id: "snowflake/s3-storage-integration",
+  id: "snowflake/create-storage-s3-integration",
   schemaVersion: 1,
   summary:
     "S3 bucket + prefix, IAM policy/role with Snowflake's trust policy, a Snowflake storage integration and external stage, proven with a live COPY INTO.",
@@ -56,7 +56,7 @@ export default defineIntegration<Params>({
 
     return `# Snowflake ⇄ S3 Integration — \`${p.SF_STORAGE_INTEGRATION_NAME}\`
 
-> Generated ${new Date().toISOString()} by \`ferry snowflake/s3-storage-integration\`.
+> Generated ${new Date().toISOString()} by \`ferry snowflake/create-storage-s3-integration\`.
 > The trust-policy external id is masked below — read the full value from
 > \`DESC INTEGRATION ${p.SF_STORAGE_INTEGRATION_NAME}\` in Snowflake if you need it.
 

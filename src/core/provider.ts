@@ -36,7 +36,7 @@ export interface ProviderDef<C = unknown> {
   dispose?(clients: C): Promise<void>;
 }
 
-export type ProviderRegistry = Record<string, ProviderDef<any>>;
+export type ProviderRegistry = Record<string, ProviderDef<unknown>>;
 
 /** Every credential key across the whole registry, not just the declared kinds. */
 export function allCredentialKeys(registry: ProviderRegistry): string[] {
