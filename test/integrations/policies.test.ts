@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { backendUserPolicy } from "../../integrations/aws/s3-backend-access/policies";
+import { backendUserPolicy } from "../../integrations/aws/create-backend-s3-user/policies";
 import {
   finalRoleTrustPolicy,
   initialRoleTrustPolicy,
   integrationRolePolicy,
-} from "../../integrations/snowflake/s3-storage-integration/policies";
+} from "../../integrations/snowflake/create-storage-s3-integration/policies";
 
 describe("integrationRolePolicy (artifact A)", () => {
   test("matches the canonical tested policy verbatim, params substituted", () => {

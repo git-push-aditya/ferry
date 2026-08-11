@@ -10,14 +10,13 @@ import { verify } from "./verify";
 
 /**
  * A least-privilege IAM user + access key so a backend service can read/write
- * the export bucket.
+ * the S3 bucket.
  *
- * Touches no Snowflake object and shares no IAM object with
- * `snowflake/s3-storage-integration` — the only overlap is the bucket, which
- * neither integration owns.
+ * Shares no IAM object with any other integration. The only resource this may
+ * reuse is the bucket, which this integration does not own.
  */
 export default defineIntegration<Params>({
-  id: "aws/s3-backend-access",
+  id: "aws/create-backend-s3-user",
   schemaVersion: 1,
   summary:
     "A least-privilege IAM user, policy and access key scoped to the export bucket, proven with a real write/read/delete through the new identity.",
@@ -42,24 +41,24 @@ export default defineIntegration<Params>({
     const accessKeyId = String(ctx.outputs.backendAccessKeyId ?? "");
     const secret = String(ctx.outputs.backendSecretAccessKey ?? "");
 
-    // The single point where the secret is surfaced: stdout, once, after the
-    // run is known good. It is masked in the file below and written nowhere.
+    // The single point where the full secret is surfaced: stdout, once, after
+    // the run is known good. The report below carries only a masked value.
     if (secret) {
       console.log(`
-  ── Runtime credentials for ${p.BACKEND_IAM_USER_NAME} — shown once, not saved ──
+  ── Runtime credentials for ${p.BACKEND_IAM_USER_NAME} — full secret shown once ──
   AWS_ACCESS_KEY_ID=${accessKeyId}
   AWS_SECRET_ACCESS_KEY=${secret}
 
-  Copy them into your backend's secret store now. ferry keeps no copy; if you
-  lose it, delete the key in IAM and re-run.
+  Copy them into your backend's secret store now. Ferry does not persist the
+  full secret; if you lose it, delete the key in IAM and re-run.
 `);
     }
 
     return `# Backend S3 IAM User — \`${p.BACKEND_IAM_USER_NAME}\`
 
-> Generated ${new Date().toISOString()} by \`ferry aws/s3-backend-access\`.
-> The secret access key is **masked** here and is written to no file — it was
-> printed to stdout once, at the end of the run that created it.
+> Generated ${new Date().toISOString()} by \`ferry aws/create-backend-s3-user\`.
+> The secret access key is **masked** here. The full secret is not written to
+> any file; it was printed to stdout once, at the end of the run that created it.
 
 ## AWS IAM
 

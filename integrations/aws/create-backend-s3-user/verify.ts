@@ -26,8 +26,8 @@ async function sleep(ms: number): Promise<void> {
 /**
  * A newly created key is not usable the instant IAM returns it, and neither is
  * a freshly attached policy. Both surface as "denied" for a few seconds, so the
- * first call through the new identity retries with backoff — exactly the same
- * shape as the storage integration's COPY retry, and for the same reason.
+ * first call through the new identity retries with backoff. The retry is only
+ * for transient propagation states; a real permission error still fails fast.
  */
 async function withPropagationRetry<T>(
   ctx: StepContext<Params>,
@@ -49,8 +49,12 @@ async function withPropagationRetry<T>(
   throw new Error("unreachable");
 }
 
+interface BodyWithTransformToString {
+  transformToString?: () => Promise<string>;
+}
+
 async function readBody(body: unknown): Promise<string> {
-  const stream = body as { transformToString?: () => Promise<string> };
+  const stream = body as BodyWithTransformToString;
   if (typeof stream?.transformToString === "function") return stream.transformToString();
   return "";
 }

@@ -104,7 +104,7 @@ export interface Step<P> {
 }
 
 export interface Integration<P> {
-  /** Folder path under integrations/, e.g. "snowflake/s3-storage-integration". */
+  /** Folder path under integrations/, e.g. "snowflake/create-storage-s3-integration". */
   id: string;
   schemaVersion: 1;
   summary: string;

@@ -6,10 +6,9 @@ import { snowflakeIdentifier } from "../../../src/providers/snowflake";
 /**
  * Folder-scoped params — resource names only, never credentials.
  *
- * EXPORT_S3_BUCKET / EXPORT_S3_PREFIX are declared here even though
- * `aws/s3-backend-access` declares them too. That duplication is deliberate:
- * an integration folder has to be standalone, and inheriting a bucket name
- * from a neighbour would make the two runs silently coupled.
+ * EXPORT_S3_BUCKET / EXPORT_S3_PREFIX are declared here on purpose. An
+ * integration folder has to be standalone, and inheriting a bucket name from
+ * elsewhere would make runs silently coupled.
  */
 export const paramsSchema = z.object({
   EXPORT_S3_BUCKET: s3BucketName,

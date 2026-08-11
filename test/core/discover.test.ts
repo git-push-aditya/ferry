@@ -77,12 +77,12 @@ describe("discoverIntegrations", () => {
 
 describe("findIntegration", () => {
   test("resolves this repo's real integrations by id", async () => {
-    const found = await findIntegration(REPO_INTEGRATIONS, "snowflake/s3-storage-integration");
+    const found = await findIntegration(REPO_INTEGRATIONS, "snowflake/create-storage-s3-integration");
     expect(found.integration.credentials).toEqual(["aws", "snowflake"]);
   });
 
   test("the backend integration declares AWS credentials only", async () => {
-    const found = await findIntegration(REPO_INTEGRATIONS, "aws/s3-backend-access");
+    const found = await findIntegration(REPO_INTEGRATIONS, "aws/create-backend-s3-user");
     expect(found.integration.credentials).toEqual(["aws"]);
   });
 
@@ -92,7 +92,7 @@ describe("findIntegration", () => {
       throw new Error("expected findIntegration to reject");
     } catch (err) {
       expect(err).toBeInstanceOf(FerryError);
-      expect((err as FerryError).details.join("\n")).toContain("snowflake/s3-storage-integration");
+      expect((err as FerryError).details.join("\n")).toContain("snowflake/create-storage-s3-integration");
     }
   });
 });

@@ -1,4 +1,4 @@
-import type { SnowflakeConnection } from "./client";
+import type { SnowflakeConnection, SnowflakeRow } from "./client";
 
 /**
  * SHOW ... LIKE uses SQL LIKE patterns, where '_' matches any single character —
@@ -6,13 +6,13 @@ import type { SnowflakeConnection } from "./client";
  * near-miss name as "already exists" and silently skip registering rollback,
  * so match the returned name exactly (Snowflake upper-cases bare identifiers).
  */
-export function showMatchesExactly(rows: Record<string, unknown>[], name: string): boolean {
+export function showMatchesExactly(rows: SnowflakeRow[], name: string): boolean {
   const target = name.toUpperCase();
   return rows.some((row) => String(row.name ?? row.NAME ?? "").toUpperCase() === target);
 }
 
 /** Flattens `DESC INTEGRATION` / `DESC STAGE` output into property → value. */
-export function descProperties(rows: Record<string, unknown>[]): Map<string, string> {
+export function descProperties(rows: SnowflakeRow[]): Map<string, string> {
   const properties = new Map<string, string>();
   for (const row of rows) {
     const property = String(row.property ?? row.PROPERTY ?? "");

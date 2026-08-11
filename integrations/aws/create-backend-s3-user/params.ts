@@ -5,9 +5,9 @@ import { s3BucketName, s3Prefix } from "../../../src/providers/aws";
 /**
  * Folder-scoped params — resource names only, never credentials.
  *
- * EXPORT_S3_BUCKET / EXPORT_S3_PREFIX are re-declared here rather than shared
- * with `snowflake/s3-storage-integration`: this folder has to stand alone, and
- * it may well point at a bucket some other team provisioned.
+ * EXPORT_S3_BUCKET / EXPORT_S3_PREFIX are declared here rather than inherited
+ * from elsewhere: this folder has to stand alone, and it may well point at a
+ * bucket some other team provisioned.
  */
 export const paramsSchema = z.object({
   EXPORT_S3_BUCKET: s3BucketName,

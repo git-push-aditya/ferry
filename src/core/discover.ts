@@ -5,12 +5,12 @@ import type { Integration } from "./define";
 import { FerryError } from "./errors";
 
 export interface DiscoveredIntegration {
-  /** Derived from the folder path, e.g. "snowflake/s3-storage-integration". */
+  /** Derived from the folder path, e.g. "snowflake/create-storage-s3-integration". */
   id: string;
   /** Absolute path of the folder — also where its .env lives. */
   dir: string;
   manifestPath: string;
-  integration: Integration<any>;
+  integration: Integration<unknown>;
 }
 
 const MANIFEST = "integration.ts";
@@ -55,7 +55,7 @@ export async function discoverIntegrations(
     const id = path.relative(integrationsDir, dir).split(path.sep).join("/");
 
     const mod = (await import(pathToFileURL(manifestPath).href)) as {
-      default?: Integration<any>;
+      default?: Integration<unknown>;
     };
     const integration = mod.default;
     if (!integration || typeof integration !== "object" || !Array.isArray(integration.steps)) {

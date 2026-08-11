@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { StepContext } from "../../src/core/define";
-import { accessKeyStep } from "../../integrations/aws/s3-backend-access/steps/access-key";
-import type { Params as BackendParams } from "../../integrations/aws/s3-backend-access/params";
-import { descIntegrationStep } from "../../integrations/snowflake/s3-storage-integration/steps/desc-integration";
-import { storageIntegrationStep } from "../../integrations/snowflake/s3-storage-integration/steps/storage-integration";
-import { trustPolicyStep } from "../../integrations/snowflake/s3-storage-integration/steps/trust-policy";
-import type { Params as StorageParams } from "../../integrations/snowflake/s3-storage-integration/params";
+import { accessKeyStep } from "../../integrations/aws/create-backend-s3-user/steps/access-key";
+import type { Params as BackendParams } from "../../integrations/aws/create-backend-s3-user/params";
+import { descIntegrationStep } from "../../integrations/snowflake/create-storage-s3-integration/steps/desc-integration";
+import { storageIntegrationStep } from "../../integrations/snowflake/create-storage-s3-integration/steps/storage-integration";
+import { trustPolicyStep } from "../../integrations/snowflake/create-storage-s3-integration/steps/trust-policy";
+import type { Params as StorageParams } from "../../integrations/snowflake/create-storage-s3-integration/params";
 
 const ACCOUNT = "909317186541";
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };

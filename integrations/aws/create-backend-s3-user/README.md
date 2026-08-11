@@ -1,4 +1,4 @@
-# `aws/s3-backend-access`
+# `aws/create-backend-s3-user`
 
 Gives a backend service its own least-privilege AWS credentials for the export
 bucket, and proves the policy actually permits the work — and nothing broader.
@@ -8,8 +8,8 @@ bun run setup:backend -- --dry-run
 bun run setup:backend
 ```
 
-Touches no Snowflake object and shares no IAM object with
-`snowflake/s3-storage-integration`.
+Shares no IAM object with any other integration. The only resource this may
+reuse is the bucket, which this integration does not own.
 
 ## What it creates
 
@@ -36,9 +36,9 @@ credentials.
 | `BACKEND_IAM_USER_NAME` | plain AWS name |
 | `BACKEND_IAM_POLICY_NAME` | plain AWS name |
 
-`EXPORT_S3_BUCKET` is declared here as well as in
-`snowflake/s3-storage-integration`. That's deliberate: this folder must stand
-alone, and it may well point at a bucket some other team provisioned.
+`EXPORT_S3_BUCKET` is declared in this folder on purpose. Each integration keeps
+its own params so the folder stands alone, and this one may point at a bucket
+some other team provisioned.
 
 ## Reuses vs creates
 
@@ -59,9 +59,11 @@ is skipped. Creating a key on every run would burn through the two-key AWS limit
 and scatter live credentials nobody asked for. To rotate: delete the old key in
 IAM, then re-run.
 
-**The secret is printed once, to stdout, and to no file.** The report under
-`output/` carries the masked value only. Ferry keeps no copy — if you lose it,
-delete the key in IAM and re-run.
+**The full secret is printed once, to stdout, and not written to any file.**
+The report under `output/` carries the masked value only. Ferry does keep a
+local report with resource identifiers and masked values, so treat `output/` as
+sensitive local metadata. If you lose the full secret, delete the key in IAM
+and re-run.
 
 **Verification degrades honestly on a skipped key.** With no key minted this run
 there is no identity to exercise, so `verify()` instead asserts the attached

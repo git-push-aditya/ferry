@@ -183,11 +183,11 @@ async function dryRun(id: string, params: string, rec: Recorder, replies = clean
   });
 }
 
-describe("snowflake/s3-storage-integration — dry-run plan", () => {
+describe("snowflake/create-storage-s3-integration — dry-run plan", () => {
   test("plans every step, in the order the circular dependency requires", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const result = await dryRun("snowflake/s3-storage-integration", STORAGE_PARAMS, rec);
+    const result = await dryRun("snowflake/create-storage-s3-integration", STORAGE_PARAMS, rec);
 
     expect(result.plan.map((p) => p.stepId)).toEqual([
       "s3-bucket",
@@ -206,7 +206,7 @@ describe("snowflake/s3-storage-integration — dry-run plan", () => {
   test("on a clean account everything is a create, except the reads and the patch", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const result = await dryRun("snowflake/s3-storage-integration", STORAGE_PARAMS, rec);
+    const result = await dryRun("snowflake/create-storage-s3-integration", STORAGE_PARAMS, rec);
 
     expect(Object.fromEntries(result.plan.map((p) => [p.stepId, p.action]))).toEqual({
       "s3-bucket": "create",
@@ -228,7 +228,7 @@ describe("snowflake/s3-storage-integration — dry-run plan", () => {
   test("mutates nothing at all — no AWS write command, no DDL, no COPY", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    await dryRun("snowflake/s3-storage-integration", STORAGE_PARAMS, rec);
+    await dryRun("snowflake/create-storage-s3-integration", STORAGE_PARAMS, rec);
 
     expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
     expect(rec.queries.filter((q) => MUTATING_SQL.test(q))).toEqual([]);
@@ -238,7 +238,7 @@ describe("snowflake/s3-storage-integration — dry-run plan", () => {
     const rec: Recorder = { commands: [], queries: [] };
     const found = await findIntegration(
       REPO_INTEGRATIONS,
-      "snowflake/s3-storage-integration",
+      "snowflake/create-storage-s3-integration",
     );
 
     const result = await runIntegration({
@@ -266,7 +266,7 @@ describe("snowflake/s3-storage-integration — dry-run plan", () => {
   test("a bucket owned by another AWS account aborts in the plan phase", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const attempt = dryRun("snowflake/s3-storage-integration", STORAGE_PARAMS, rec, (name) =>
+    const attempt = dryRun("snowflake/create-storage-s3-integration", STORAGE_PARAMS, rec, (name) =>
       name === "HeadBucketCommand" ? awsError("Forbidden", 403) : cleanAccountReplies(name),
     );
 
@@ -275,11 +275,11 @@ describe("snowflake/s3-storage-integration — dry-run plan", () => {
   });
 });
 
-describe("aws/s3-backend-access — dry-run plan", () => {
+describe("aws/create-backend-s3-user — dry-run plan", () => {
   test("puts the shared bucket check in front of the IAM work", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const result = await dryRun("aws/s3-backend-access", BACKEND_PARAMS, rec);
+    const result = await dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec);
 
     expect(result.plan.map((p) => p.stepId)).toEqual([
       "s3-bucket",
@@ -293,7 +293,7 @@ describe("aws/s3-backend-access — dry-run plan", () => {
   test("reuses a bucket it did not create instead of planning one", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const result = await dryRun("aws/s3-backend-access", BACKEND_PARAMS, rec, (name) =>
+    const result = await dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec, (name) =>
       name === "HeadBucketCommand" ? {} : cleanAccountReplies(name),
     );
 
@@ -306,7 +306,7 @@ describe("aws/s3-backend-access — dry-run plan", () => {
   test("leaves an existing access key alone — re-running mints no second credential", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const result = await dryRun("aws/s3-backend-access", BACKEND_PARAMS, rec, (name) =>
+    const result = await dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec, (name) =>
       name === "ListAccessKeysCommand"
         ? { AccessKeyMetadata: [{ AccessKeyId: "AKIAEXISTING" }] }
         : cleanAccountReplies(name),
@@ -318,7 +318,7 @@ describe("aws/s3-backend-access — dry-run plan", () => {
   test("mutates nothing at all", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    await dryRun("aws/s3-backend-access", BACKEND_PARAMS, rec);
+    await dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec);
 
     expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
   });
@@ -326,7 +326,7 @@ describe("aws/s3-backend-access — dry-run plan", () => {
   test("a bucket owned by another AWS account aborts in the plan phase", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const attempt = dryRun("aws/s3-backend-access", BACKEND_PARAMS, rec, (name) =>
+    const attempt = dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec, (name) =>
       name === "HeadBucketCommand" ? awsError("Forbidden", 403) : cleanAccountReplies(name),
     );
 
@@ -337,7 +337,7 @@ describe("aws/s3-backend-access — dry-run plan", () => {
   test("declares no Snowflake credentials, so no Snowflake client is ever built", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    await dryRun("aws/s3-backend-access", BACKEND_PARAMS, rec);
+    await dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec);
 
     expect(rec.queries).toEqual([]);
   });

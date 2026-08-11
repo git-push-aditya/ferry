@@ -1,4 +1,4 @@
-// Builders that emit the CANONICAL TESTED ARTIFACTS verbatim (see docs/completeIntegration.md).
+// Builders that emit the CANONICAL TESTED ARTIFACTS verbatim.
 // Do NOT add, remove, or broaden any action, resource, principal, or condition here.
 // The only variation permitted is the parameter substitutions below.
 
