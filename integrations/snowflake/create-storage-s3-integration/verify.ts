@@ -14,8 +14,17 @@ const LANDING_POLL_TIMEOUT_MS = 30_000;
  * "Provisioned" means a CSV actually travelled Snowflake → assume-role → S3,
  * not that a handful of API calls returned 200. A failure here rolls the entire
  * run back, because half-working cross-cloud plumbing is worse than none.
+ *
+ * `ACCESS_MODE=read-only` gets a different proof: a read-only IAM policy
+ * would correctly *deny* the write-side COPY INTO below, so treating that
+ * denial as a verify failure would be wrong — the denial is the point being
+ * verified. See `verifyReadOnly` for that variant.
  */
 export async function verify(ctx: StepContext<Params>): Promise<void> {
+  if (ctx.params.ACCESS_MODE === "read-only") {
+    return verifyReadOnly(ctx);
+  }
+
   const { s3 } = awsClients(ctx);
   const conn = await snowflakeClients(ctx).connection();
   const bucket = ctx.params.EXPORT_S3_BUCKET;
@@ -75,4 +84,39 @@ export async function verify(ctx: StepContext<Params>): Promise<void> {
       ctx.log.success("Verification object(s) removed");
     }
   }
+}
+
+/**
+ * Read-only proof: confirm the role can read through the stage (a `LIST`
+ * only needs `s3:ListBucket`/`s3:GetBucketLocation`, granted in both access
+ * modes) and confirm a write attempt is actually rejected by AWS — proving
+ * the restriction is enforced, not merely requested.
+ *
+ * No retry loop here: unlike the read-write path, a denial is the expected
+ * outcome, not a transient propagation symptom to wait out.
+ */
+async function verifyReadOnly(ctx: StepContext<Params>): Promise<void> {
+  const conn = await snowflakeClients(ctx).connection();
+
+  await conn.runQuery(`LIST @${ctx.params.SF_STAGE_NAME};`);
+  ctx.log.success("Verification LIST succeeded — read access confirmed");
+
+  let writeWasDenied = false;
+  try {
+    await conn.runQuery(
+      `COPY INTO @${ctx.params.SF_STAGE_NAME}/setup_test
+          FROM (SELECT CURRENT_TIMESTAMP)
+          FILE_FORMAT = (TYPE = CSV) HEADER = TRUE OVERWRITE = TRUE;`,
+    );
+  } catch (err) {
+    if (!isAssumeRoleDenied(err)) throw err;
+    writeWasDenied = true;
+  }
+
+  if (!writeWasDenied) {
+    throw new Error(
+      `ACCESS_MODE=read-only but the verification write succeeded — the IAM policy is not actually read-only`,
+    );
+  }
+  ctx.log.success("Verification write was denied as expected — read-only scoping confirmed");
 }

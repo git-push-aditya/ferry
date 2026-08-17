@@ -14,7 +14,7 @@ bun run setup:integration
 | --- | --- | --- |
 | `s3-bucket` | S3 bucket (**shared** — see below) | — |
 | `s3-prefix-marker` | zero-byte object at the prefix | — |
-| `iam-policy` | IAM policy: `GetBucketLocation`/`ListBucket` on the bucket, `Get`/`Put`/`DeleteObject` on the prefix | A |
+| `iam-policy` | IAM policy: `GetBucketLocation`/`ListBucket` on the bucket, plus (per `ACCESS_MODE`) `GetObject`/`PutObject`/`DeleteObject` (read-write) or `GetObject`/`ListBucket` (read-only) on the prefix | A |
 | `iam-role` | IAM role with a **placeholder** trust policy (account root) | B |
 | `attach-policy` | policy → role attachment, then the IAM propagation wait | — |
 | `snowflake-connect` | nothing — opens the shared connection and self-checks it | — |
@@ -22,7 +22,7 @@ bun run setup:integration
 | `desc-integration` | nothing — reads `STORAGE_AWS_IAM_USER_ARN` + `STORAGE_AWS_EXTERNAL_ID` | E |
 | `trust-policy` | **patches** the role's trust policy to Snowflake's real principal + external id | C |
 | `stage` | Snowflake external `STAGE` | F |
-| `verify` | a `COPY INTO` that lands a CSV in S3, then deletes it | G |
+| `verify` | read-write: a `COPY INTO` that lands a CSV in S3, then deletes it. read-only: a `LIST` proving read access, plus a test write confirmed *denied* | G |
 
 ## What it needs
 
@@ -40,6 +40,18 @@ write access; `SNOWFLAKE_ROLE` must be able to `CREATE INTEGRATION` (in practice
 | `SF_STAGE_NAME` | same rule |
 | `AWS_STORAGE_ROLE_NAME` | plain AWS name, hyphens fine |
 | `AWS_STORAGE_POLICY_NAME` | plain AWS name, hyphens fine |
+| `ACCESS_MODE` | `read-only` \| `read-write`, default `read-write` (unchanged behavior) |
+
+### `ACCESS_MODE`
+
+- **`read-write`** (default) — unchanged from before this param existed: the
+  IAM policy grants `GetObject`/`PutObject`/`DeleteObject` on the prefix.
+- **`read-only`** — the IAM policy drops the write actions, granting only
+  `GetObject`/`ListBucket` on the prefix. Use this when the stage should only
+  ever be read from (e.g. an import-only integration). Note this scopes the
+  **IAM side** only — the Snowflake `STAGE`/`STORAGE INTEGRATION` objects
+  themselves have no native read-only flag; the restriction is entirely
+  enforced by the IAM policy attached to the role Snowflake assumes.
 
 ## Reuses vs creates
 
@@ -49,7 +61,10 @@ write access; `SNOWFLAKE_ROLE` must be able to `CREATE INTEGRATION` (in practice
   **no rollback is registered for it**. Only the run that actually creates the
   bucket may delete it.
 - **IAM policy / role / attachment — created if missing, skipped if present.** An
-  attachment that was already in place is never detached on rollback.
+  attachment that was already in place is never detached on rollback. The
+  policy document is only written at creation time — changing `ACCESS_MODE`
+  on a folder whose policy already exists has no effect until the policy is
+  recreated (delete it, or bump `AWS_STORAGE_POLICY_NAME`, and re-run).
 - **Storage integration — created if missing, otherwise re-pointed.** On the
   re-point path the prior `STORAGE_AWS_ROLE_ARN` and `STORAGE_ALLOWED_LOCATIONS`
   are captured first, so rollback restores them instead of dropping an

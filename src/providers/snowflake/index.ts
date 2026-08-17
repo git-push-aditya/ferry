@@ -24,4 +24,5 @@ export const snowflakeProvider: ProviderDef<SnowflakeClients> = {
 export * from "./client";
 export * from "./credentials";
 export * from "./ddl";
+export * from "./objects";
 export * from "./params";

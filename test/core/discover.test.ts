@@ -82,7 +82,7 @@ describe("findIntegration", () => {
   });
 
   test("the backend integration declares AWS credentials only", async () => {
-    const found = await findIntegration(REPO_INTEGRATIONS, "aws/create-backend-s3-user");
+    const found = await findIntegration(REPO_INTEGRATIONS, "aws/s3/create-backend-s3-user");
     expect(found.integration.credentials).toEqual(["aws"]);
   });
 

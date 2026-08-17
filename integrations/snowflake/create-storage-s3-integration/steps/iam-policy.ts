@@ -21,7 +21,11 @@ export const iamPolicyStep: Step<Params> = {
       new CreatePolicyCommand({
         PolicyName: ctx.params.AWS_STORAGE_POLICY_NAME,
         PolicyDocument: JSON.stringify(
-          integrationRolePolicy(ctx.params.EXPORT_S3_BUCKET, ctx.params.EXPORT_S3_PREFIX),
+          integrationRolePolicy(
+            ctx.params.EXPORT_S3_BUCKET,
+            ctx.params.EXPORT_S3_PREFIX,
+            ctx.params.ACCESS_MODE,
+          ),
         ),
       }),
     );

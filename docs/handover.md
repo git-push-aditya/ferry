@@ -35,7 +35,7 @@ behaviour **including the live verification** — is **not confirmed**. See sect
 At handover there are three uncommitted edits, none of them mine:
 
 - `docs/completeIntegration.md` deleted.
-- Two comment-only tweaks in `integrations/aws/create-backend-s3-user/integration.ts` and
+- Two comment-only tweaks in `integrations/aws/s3/create-backend-s3-user/integration.ts` and
   `integrations/snowflake/create-storage-s3-integration/steps/trust-policy.ts`.
 
 **Action needed:** three files still cite `docs/completeIntegration.md` as the source of
@@ -189,7 +189,7 @@ wrote it to `.env.backend`. Both contradict invariant #6. The report now carries
 masked value; `--write-env` is gone.
 
 Awkward detail: the single stdout print happens inside
-`integrations/aws/create-backend-s3-user/integration.ts`'s `report()`, because the engine calls
+`integrations/aws/s3/create-backend-s3-user/integration.ts`'s `report()`, because the engine calls
 `report()` exactly once, after the run is known good. It makes `report()` mildly
 side-effecting, which is a trap for future integrations. If a third integration ever needs
 to surface a secret, promote this to a proper engine concern (an `announce()` hook, or
@@ -255,7 +255,7 @@ Specifically unproven:
    `COPY INTO` verification actually landing a CSV.
 2. Immediate re-run being a genuine no-op that exits 0.
 3. Ctrl-C mid-run rolling back only this run's resources, LIFO.
-4. `aws/create-backend-s3-user` running standalone against a bucket it did not create.
+4. `aws/s3/create-backend-s3-user` running standalone against a bucket it did not create.
 5. The real IAM propagation timings still being adequate. The waits were carried over
    verbatim, but the trust-policy patch now runs as a `reconcile` in a different position
    relative to the other steps, so the timing profile is not identical to the old script's.

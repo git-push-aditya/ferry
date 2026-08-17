@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { backendUserPolicy } from "../../integrations/aws/create-backend-s3-user/policies";
+import { backendUserPolicy } from "../../integrations/aws/s3/create-backend-s3-user/policies";
 import {
   finalRoleTrustPolicy,
   initialRoleTrustPolicy,

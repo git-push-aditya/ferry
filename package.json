@@ -5,13 +5,16 @@
   "scripts": {
     "ferry": "bun bin/ferry.ts",
     "setup:integration": "bun bin/ferry.ts snowflake/create-storage-s3-integration",
-    "setup:backend": "bun bin/ferry.ts aws/create-backend-s3-user",
+    "setup:backend": "bun bin/ferry.ts aws/s3/create-backend-s3-user",
+    "setup:bucket": "bun bin/ferry.ts aws/s3/create-bucket",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-ec2": "^3.1111.0",
     "@aws-sdk/client-iam": "^3.906.0",
     "@aws-sdk/client-s3": "^3.906.0",
+    "@aws-sdk/client-ssm": "^3.1111.0",
     "@aws-sdk/client-sts": "^3.906.0",
     "snowflake-sdk": "^2.1.2",
     "zod": "^3.24.1"

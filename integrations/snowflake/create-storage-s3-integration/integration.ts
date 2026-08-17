@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import { defineIntegration } from "../../../src/core/define";
 import { mask } from "../../../src/core/report";
 import { policyArn, roleArn, s3BucketStep, s3PrefixMarkerStep } from "../../../src/providers/aws";
@@ -26,7 +27,11 @@ export default defineIntegration<Params>({
   summary:
     "S3 bucket + prefix, IAM policy/role with Snowflake's trust policy, a Snowflake storage integration and external stage, proven with a live COPY INTO.",
 
-  params: paramsSchema,
+  // ACCESS_MODE carries a zod default, so the .env-facing input (optional)
+  // differs from the parsed output (required) — the same ZodEffects shape
+  // aws/s3/create-bucket's params cast for, which z.ZodType<P>'s default
+  // same-Input-as-Output generic doesn't model.
+  params: paramsSchema as unknown as z.ZodType<Params>,
   credentials: ["aws", "snowflake"],
 
   steps: [

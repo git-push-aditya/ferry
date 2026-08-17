@@ -147,6 +147,24 @@ BACKEND_IAM_USER_NAME=ferry-test-user
 BACKEND_IAM_POLICY_NAME=ferry-test-user-policy
 `;
 
+const CREATE_BUCKET_PARAMS = `
+S3_BUCKET_NAME=ferry-test-new-bucket
+`;
+
+const UPDATE_VERSIONING_PARAMS = `
+S3_BUCKET_NAME=ferry-test-existing-bucket
+DESIRED_VERSIONING_STATUS=Enabled
+`;
+
+const UPDATE_ENCRYPTION_PARAMS = `
+S3_BUCKET_NAME=ferry-test-existing-bucket
+ENCRYPTION_ALGORITHM=AES256
+`;
+
+const UPDATE_PERMISSIONS_PARAMS = `
+S3_BUCKET_NAME=ferry-test-existing-bucket
+`;
+
 let workDir: string;
 let silenced: { log: typeof console.log; warn: typeof console.warn };
 
@@ -275,11 +293,11 @@ describe("snowflake/create-storage-s3-integration — dry-run plan", () => {
   });
 });
 
-describe("aws/create-backend-s3-user — dry-run plan", () => {
+describe("aws/s3/create-backend-s3-user — dry-run plan", () => {
   test("puts the shared bucket check in front of the IAM work", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const result = await dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec);
+    const result = await dryRun("aws/s3/create-backend-s3-user", BACKEND_PARAMS, rec);
 
     expect(result.plan.map((p) => p.stepId)).toEqual([
       "s3-bucket",
@@ -293,7 +311,7 @@ describe("aws/create-backend-s3-user — dry-run plan", () => {
   test("reuses a bucket it did not create instead of planning one", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const result = await dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec, (name) =>
+    const result = await dryRun("aws/s3/create-backend-s3-user", BACKEND_PARAMS, rec, (name) =>
       name === "HeadBucketCommand" ? {} : cleanAccountReplies(name),
     );
 
@@ -306,7 +324,7 @@ describe("aws/create-backend-s3-user — dry-run plan", () => {
   test("leaves an existing access key alone — re-running mints no second credential", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const result = await dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec, (name) =>
+    const result = await dryRun("aws/s3/create-backend-s3-user", BACKEND_PARAMS, rec, (name) =>
       name === "ListAccessKeysCommand"
         ? { AccessKeyMetadata: [{ AccessKeyId: "AKIAEXISTING" }] }
         : cleanAccountReplies(name),
@@ -318,7 +336,7 @@ describe("aws/create-backend-s3-user — dry-run plan", () => {
   test("mutates nothing at all", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    await dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec);
+    await dryRun("aws/s3/create-backend-s3-user", BACKEND_PARAMS, rec);
 
     expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
   });
@@ -326,7 +344,7 @@ describe("aws/create-backend-s3-user — dry-run plan", () => {
   test("a bucket owned by another AWS account aborts in the plan phase", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    const attempt = dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec, (name) =>
+    const attempt = dryRun("aws/s3/create-backend-s3-user", BACKEND_PARAMS, rec, (name) =>
       name === "HeadBucketCommand" ? awsError("Forbidden", 403) : cleanAccountReplies(name),
     );
 
@@ -337,8 +355,196 @@ describe("aws/create-backend-s3-user — dry-run plan", () => {
   test("declares no Snowflake credentials, so no Snowflake client is ever built", async () => {
     const rec: Recorder = { commands: [], queries: [] };
 
-    await dryRun("aws/create-backend-s3-user", BACKEND_PARAMS, rec);
+    await dryRun("aws/s3/create-backend-s3-user", BACKEND_PARAMS, rec);
 
     expect(rec.queries).toEqual([]);
+  });
+});
+
+describe("aws/s3/create-bucket — dry-run plan", () => {
+  test("plans the bucket, then every opt-in/always-on setting step, in order", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    const result = await dryRun("aws/s3/create-bucket", CREATE_BUCKET_PARAMS, rec);
+
+    expect(result.plan.map((p) => p.stepId)).toEqual([
+      "s3-bucket",
+      "bucket-versioning",
+      "bucket-encryption",
+      "bucket-public-access-block",
+    ]);
+  });
+
+  test("plans to create the bucket on a clean account", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    const result = await dryRun("aws/s3/create-bucket", CREATE_BUCKET_PARAMS, rec);
+
+    expect(result.plan.find((p) => p.stepId === "s3-bucket")).toMatchObject({
+      state: "missing",
+      action: "create",
+    });
+  });
+
+  test("versioning/encryption/public-access-block always reconcile — the desired value depends on params, not on plan-time state", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    const result = await dryRun("aws/s3/create-bucket", CREATE_BUCKET_PARAMS, rec);
+
+    for (const id of ["bucket-versioning", "bucket-encryption", "bucket-public-access-block"]) {
+      expect(result.plan.find((p) => p.stepId === id)).toMatchObject({ action: "reconcile" });
+    }
+  });
+
+  test("mutates nothing at all", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    await dryRun("aws/s3/create-bucket", CREATE_BUCKET_PARAMS, rec);
+
+    expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
+  });
+
+  test("a bucket name owned by another AWS account aborts in the plan phase", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    const attempt = dryRun("aws/s3/create-bucket", CREATE_BUCKET_PARAMS, rec, (name) =>
+      name === "HeadBucketCommand" ? awsError("Forbidden", 403) : cleanAccountReplies(name),
+    );
+
+    await expect(attempt).rejects.toThrow(FerryError);
+    expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
+  });
+
+  test("declares no Snowflake credentials, so no Snowflake client is ever built", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    await dryRun("aws/s3/create-bucket", CREATE_BUCKET_PARAMS, rec);
+
+    expect(rec.queries).toEqual([]);
+  });
+});
+
+/** These two integrations operate on a bucket that already exists. */
+function existingBucketReplies(name: string): unknown {
+  return name === "HeadBucketCommand" ? {} : cleanAccountReplies(name);
+}
+
+describe("aws/s3/update-bucket-versioning — dry-run plan", () => {
+  test("plans the guard step, then the versioning step", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    const result = await dryRun(
+      "aws/s3/update-bucket-versioning",
+      UPDATE_VERSIONING_PARAMS,
+      rec,
+      existingBucketReplies,
+    );
+
+    expect(result.plan.map((p) => p.stepId)).toEqual(["s3-bucket-exists", "bucket-versioning"]);
+  });
+
+  test("a bucket that does not exist aborts in the plan phase", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    const attempt = dryRun(
+      "aws/s3/update-bucket-versioning",
+      UPDATE_VERSIONING_PARAMS,
+      rec,
+      cleanAccountReplies,
+    );
+
+    await expect(attempt).rejects.toThrow(FerryError);
+    expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
+  });
+
+  test("mutates nothing at all", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    await dryRun("aws/s3/update-bucket-versioning", UPDATE_VERSIONING_PARAMS, rec, existingBucketReplies);
+
+    expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
+  });
+});
+
+describe("aws/s3/update-bucket-encryption — dry-run plan", () => {
+  test("plans the guard step, then the encryption step", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    const result = await dryRun(
+      "aws/s3/update-bucket-encryption",
+      UPDATE_ENCRYPTION_PARAMS,
+      rec,
+      existingBucketReplies,
+    );
+
+    expect(result.plan.map((p) => p.stepId)).toEqual(["s3-bucket-exists", "bucket-encryption"]);
+  });
+
+  test("a bucket that does not exist aborts in the plan phase", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    const attempt = dryRun(
+      "aws/s3/update-bucket-encryption",
+      UPDATE_ENCRYPTION_PARAMS,
+      rec,
+      cleanAccountReplies,
+    );
+
+    await expect(attempt).rejects.toThrow(FerryError);
+    expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
+  });
+
+  test("mutates nothing at all", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    await dryRun("aws/s3/update-bucket-encryption", UPDATE_ENCRYPTION_PARAMS, rec, existingBucketReplies);
+
+    expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
+  });
+});
+
+describe("aws/s3/update-bucket-permissions — dry-run plan", () => {
+  test("plans the guard step, then policy, then public-access-block", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    const result = await dryRun(
+      "aws/s3/update-bucket-permissions",
+      UPDATE_PERMISSIONS_PARAMS,
+      rec,
+      existingBucketReplies,
+    );
+
+    expect(result.plan.map((p) => p.stepId)).toEqual([
+      "s3-bucket-exists",
+      "bucket-policy",
+      "bucket-public-access-block",
+    ]);
+  });
+
+  test("a bucket that does not exist aborts in the plan phase", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    const attempt = dryRun(
+      "aws/s3/update-bucket-permissions",
+      UPDATE_PERMISSIONS_PARAMS,
+      rec,
+      cleanAccountReplies,
+    );
+
+    await expect(attempt).rejects.toThrow(FerryError);
+    expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
+  });
+
+  test("mutates nothing at all", async () => {
+    const rec: Recorder = { commands: [], queries: [] };
+
+    await dryRun(
+      "aws/s3/update-bucket-permissions",
+      UPDATE_PERMISSIONS_PARAMS,
+      rec,
+      existingBucketReplies,
+    );
+
+    expect(rec.commands.filter((c) => MUTATING.includes(c))).toEqual([]);
   });
 });
