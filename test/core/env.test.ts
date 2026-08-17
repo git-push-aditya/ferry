@@ -3,7 +3,7 @@ import { z } from "zod";
 import { loadEnvLayers, parseEnvFile } from "../../src/core/env";
 import { FerryError } from "../../src/core/errors";
 import { allCredentialKeys } from "../../src/core/provider";
-import backendIntegration from "../../integrations/aws/create-backend-s3-user/integration";
+import backendIntegration from "../../integrations/aws/s3/create-backend-s3-user/integration";
 import storageIntegration from "../../integrations/snowflake/create-storage-s3-integration/integration";
 import { awsCredentialsSchema } from "../../src/providers/aws";
 import { snowflakeCredentialsSchema } from "../../src/providers/snowflake";
@@ -12,7 +12,7 @@ import { providers } from "../../src/providers/registry";
 const CREDENTIAL_KEYS = allCredentialKeys(providers);
 
 // The composed schemas the engine builds for each integration's declared
-// credential kinds. `aws/create-backend-s3-user` declares ["aws"] only, which is why
+// credential kinds. `aws/s3/create-backend-s3-user` declares ["aws"] only, which is why
 // it never asks for a Snowflake variable.
 const INTEGRATION_CREDS = z.intersection(awsCredentialsSchema, snowflakeCredentialsSchema);
 const BACKEND_CREDS = awsCredentialsSchema;
@@ -86,7 +86,7 @@ function loadBackendEnv(
   return loadEnvLayers({
     credentialSource: creds,
     folderSource: params,
-    folderEnvPath: "integrations/aws/create-backend-s3-user/.env",
+    folderEnvPath: "integrations/aws/s3/create-backend-s3-user/.env",
     credentialKeys: CREDENTIAL_KEYS,
     credentialSchema: BACKEND_CREDS,
     paramsSchema: backendIntegration.params,
@@ -201,7 +201,7 @@ describe("snowflake/create-storage-s3-integration env", () => {
   });
 });
 
-describe("aws/create-backend-s3-user env", () => {
+describe("aws/s3/create-backend-s3-user env", () => {
   test("accepts a fully valid environment", () => {
     const { params } = loadBackendEnv(VALID_AWS_CREDS);
     expect(params.BACKEND_IAM_USER_NAME).toBe("backend-user");

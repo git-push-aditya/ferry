@@ -17,6 +17,12 @@ export const paramsSchema = z.object({
   SF_STAGE_NAME: snowflakeIdentifier,
   AWS_STORAGE_ROLE_NAME: nonEmpty,
   AWS_STORAGE_POLICY_NAME: nonEmpty,
+
+  // Defaults to "read-write" to preserve current behavior for anyone already
+  // using this integration without setting it. "read-only" drops the write
+  // actions (PutObject/DeleteObject) from the generated IAM policy — see
+  // policies/index.ts.
+  ACCESS_MODE: z.enum(["read-only", "read-write"]).default("read-write"),
 });
 
 export type Params = z.infer<typeof paramsSchema>;

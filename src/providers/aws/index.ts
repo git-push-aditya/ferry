@@ -19,6 +19,7 @@ export const awsProvider: ProviderDef<AwsClients> = {
 
 export * from "./clients";
 export * from "./credentials";
+export * from "./ec2";
 export * from "./errors";
 export * from "./iam";
 export * from "./params";

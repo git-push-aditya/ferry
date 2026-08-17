@@ -1,5 +1,6 @@
 import type { ProviderRegistry } from "../core/provider";
 import { awsProvider } from "./aws";
+import { githubProvider } from "./github";
 import { snowflakeProvider } from "./snowflake";
 
 /**
@@ -12,4 +13,5 @@ import { snowflakeProvider } from "./snowflake";
 export const providers: ProviderRegistry = {
   [awsProvider.id]: awsProvider,
   [snowflakeProvider.id]: snowflakeProvider,
+  [githubProvider.id]: githubProvider,
 };

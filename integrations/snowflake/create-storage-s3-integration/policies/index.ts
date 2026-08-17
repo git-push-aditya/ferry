@@ -2,8 +2,25 @@
 // Do NOT add, remove, or broaden any action, resource, principal, or condition here.
 // The only variation permitted is the parameter substitutions below.
 
-/** Artifact A — what the role is allowed to do to the bucket/prefix. */
-export function integrationRolePolicy(bucket: string, prefix: string) {
+/**
+ * Artifact A — what the role is allowed to do to the bucket/prefix.
+ *
+ * `accessMode` defaults to "read-write" to match the original, unconditional
+ * behavior of this policy exactly — existing callers that don't pass it see
+ * no change. "read-only" removes the write actions (`s3:PutObject`,
+ * `s3:DeleteObject`) from the object statement; the read-write action list is
+ * otherwise untouched.
+ */
+export function integrationRolePolicy(
+  bucket: string,
+  prefix: string,
+  accessMode: "read-only" | "read-write" = "read-write",
+) {
+  const objectActions =
+    accessMode === "read-only"
+      ? ["s3:GetObject", "s3:ListBucket"]
+      : ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"];
+
   return {
     Version: "2012-10-17",
     Statement: [
@@ -16,7 +33,7 @@ export function integrationRolePolicy(bucket: string, prefix: string) {
       {
         Sid: "ObjectPermissions",
         Effect: "Allow",
-        Action: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+        Action: objectActions,
         Resource: `arn:aws:s3:::${bucket}/${prefix}*`,
       },
     ],
