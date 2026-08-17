@@ -3,6 +3,7 @@ import { IAMClient } from "@aws-sdk/client-iam";
 import { STSClient } from "@aws-sdk/client-sts";
 import { EC2Client } from "@aws-sdk/client-ec2";
 import { SSMClient } from "@aws-sdk/client-ssm";
+import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import type { AwsCredentials } from "./credentials";
 
 export const AWS_PROVIDER_ID = "aws";
@@ -13,6 +14,7 @@ export interface AwsClients {
   sts: STSClient;
   ec2: EC2Client;
   ssm: SSMClient;
+  secretsManager: SecretsManagerClient;
   region: string;
 }
 
@@ -45,6 +47,10 @@ export function makeSsmClient(env: AwsCredentials): SSMClient {
   return new SSMClient({ region: env.AWS_REGION, credentials: credentials(env) });
 }
 
+export function makeSecretsManagerClient(env: AwsCredentials): SecretsManagerClient {
+  return new SecretsManagerClient({ region: env.AWS_REGION, credentials: credentials(env) });
+}
+
 export function makeAwsClients(env: AwsCredentials): AwsClients {
   return {
     s3: makeS3Client(env),
@@ -52,6 +58,7 @@ export function makeAwsClients(env: AwsCredentials): AwsClients {
     sts: makeStsClient(env),
     ec2: makeEc2Client(env),
     ssm: makeSsmClient(env),
+    secretsManager: makeSecretsManagerClient(env),
     region: env.AWS_REGION,
   };
 }

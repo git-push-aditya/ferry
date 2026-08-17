@@ -8,6 +8,7 @@ import { error as logError } from "../src/core/logger";
 // The entry point is the composition root, so it is the one place that may know
 // which providers exist — it already builds the registry.
 import { describeAwsError, isAwsError } from "../src/providers/aws";
+import { describeGithubError, GithubApiError } from "../src/providers/github";
 import { providers } from "../src/providers/registry";
 
 /**
@@ -45,6 +46,7 @@ main().catch((err) => {
     process.exit(1);
   }
   if (isAwsError(err)) logError(describeAwsError(err));
+  if (err instanceof GithubApiError) logError(describeGithubError(err));
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });
