@@ -16,8 +16,15 @@ import type { Params as DetachParams } from "../../integrations/aws/iam/role/det
 import { trustPolicyStep } from "../../integrations/aws/iam/role/update-trust-policy/steps/trust-policy";
 import type { Params as TrustParams } from "../../integrations/aws/iam/role/update-trust-policy/params";
 
-import { inlinePolicyStep } from "../../integrations/aws/iam/role/create-inline-policy-for-role/steps/inline-policy";
+import { desiredPolicyDocument } from "../../integrations/aws/iam/role/create-inline-policy-for-role/params";
 import type { Params as InlineParams } from "../../integrations/aws/iam/role/create-inline-policy-for-role/params";
+import { iamInlinePolicyStep } from "../../src/providers/aws/iam";
+
+const inlinePolicyStep = iamInlinePolicyStep<InlineParams>({
+  roleName: (p) => p.ROLE_NAME,
+  policyName: (p) => p.POLICY_NAME,
+  document: (p) => desiredPolicyDocument(p),
+});
 
 import { rotatePermissionsStep } from "../../integrations/aws/iam/role/rotate-role-permissions/steps/rotate-permissions";
 import type { Params as RotateParams } from "../../integrations/aws/iam/role/rotate-role-permissions/params";

@@ -1,7 +1,6 @@
 import { defineIntegration } from "../../../../../src/core/define";
-import { iamRoleExistsGuardStep, roleArn } from "../../../../../src/providers/aws";
-import { inlinePolicyStep } from "./steps/inline-policy";
-import { paramsSchema, type Params } from "./params";
+import { iamInlinePolicyStep, iamRoleExistsGuardStep, roleArn } from "../../../../../src/providers/aws";
+import { desiredPolicyDocument, paramsSchema, type Params } from "./params";
 import { verify } from "./verify";
 
 /**
@@ -22,7 +21,11 @@ export default defineIntegration<Params>({
 
   steps: [
     iamRoleExistsGuardStep<Params>({ roleName: (p) => p.ROLE_NAME }),
-    inlinePolicyStep,
+    iamInlinePolicyStep<Params>({
+      roleName: (p) => p.ROLE_NAME,
+      policyName: (p) => p.POLICY_NAME,
+      document: (p) => desiredPolicyDocument(p),
+    }),
   ],
 
   verify,

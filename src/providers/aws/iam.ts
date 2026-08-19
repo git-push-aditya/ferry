@@ -9,6 +9,7 @@ import {
   DeleteAccessKeyCommand,
   DeleteLoginProfileCommand,
   DeleteRoleCommand,
+  DeleteRolePolicyCommand,
   DeleteServiceSpecificCredentialCommand,
   DeleteSigningCertificateCommand,
   DeleteSSHPublicKeyCommand,
@@ -20,6 +21,7 @@ import {
   GetLoginProfileCommand,
   GetPolicyCommand,
   GetRoleCommand,
+  GetRolePolicyCommand,
   GetUserCommand,
   ListAccessKeysCommand,
   ListAttachedRolePoliciesCommand,
@@ -30,6 +32,7 @@ import {
   ListSigningCertificatesCommand,
   ListSSHPublicKeysCommand,
   ListUserPoliciesCommand,
+  PutRolePolicyCommand,
   RemoveUserFromGroupCommand,
   UpdateAccessKeyCommand,
   type IAMClient,
@@ -330,6 +333,136 @@ export function iamDetachRolePolicyStep<P>(opts: RolePolicyAttachmentOptions<P>)
           policyArn: opts.policyArn(ctx.params),
           action: "detached",
         },
+      };
+    },
+  };
+}
+
+export interface RoleInlinePolicyOptions<P> {
+  roleName(params: P): string;
+  policyName(params: P): string;
+  document(params: P): object;
+  id?: string;
+  title?: string;
+}
+
+/** Stable-key JSON compare so key order doesn't produce a false diff. */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * Reconciles a named inline policy on a role to an exact desired document.
+ * `PutRolePolicy` is documented as "adds *or updates*" — inherently a
+ * create-or-replace call under that policy name, so this always reconciles
+ * rather than splitting into create()-vs-reconcile(): the desired document
+ * depends on params, not knowable as a plan-time missing/exists split.
+ *
+ * Promoted from aws/iam/role/create-inline-policy-for-role's local
+ * inline-policy step — this is its second consumer
+ * (ecr-push-access-for-actions is the first new one), which is this
+ * project's own "two bespoke copies fine, a third promotes" threshold.
+ * `create-inline-policy-for-role` itself now just calls this factory.
+ */
+export function iamInlinePolicyStep<P>(opts: RoleInlinePolicyOptions<P>): Step<P> {
+  return {
+    id: opts.id ?? "inline-policy",
+    title: opts.title ?? "Reconcile inline policy on role",
+
+    async check() {
+      // The desired document isn't knowable as a plan-time missing/exists
+      // split — it depends on params — so this always reconciles, same
+      // shape as trustPolicyStep in create-storage-s3-integration.
+      return "missing";
+    },
+
+    async reconcile(ctx) {
+      const { iam } = awsClients(ctx);
+      const roleName = opts.roleName(ctx.params);
+      const policyName = opts.policyName(ctx.params);
+      const desired = opts.document(ctx.params);
+
+      let hadExisting = false;
+      let priorDocument: Record<string, unknown> | undefined;
+      try {
+        const before = await iam.send(
+          new GetRolePolicyCommand({ RoleName: roleName, PolicyName: policyName }),
+        );
+        hadExisting = true;
+        priorDocument = before.PolicyDocument
+          ? JSON.parse(decodeURIComponent(before.PolicyDocument))
+          : {};
+      } catch (err) {
+        if (!isNoSuchEntity(err)) throw err;
+      }
+
+      if (hadExisting && stableStringify(priorDocument) === stableStringify(desired)) {
+        ctx.log.info(
+          `Inline policy "${policyName}" on role "${roleName}" already matches the desired document`,
+        );
+        return {};
+      }
+
+      await iam.send(
+        new PutRolePolicyCommand({
+          RoleName: roleName,
+          PolicyName: policyName,
+          PolicyDocument: JSON.stringify(desired),
+        }),
+      );
+      ctx.log.success(`Set inline policy "${policyName}" on role "${roleName}"`);
+
+      return {
+        changed: true,
+        hadExistingInlinePolicy: hadExisting,
+        priorInlinePolicyDocument: hadExisting ? JSON.stringify(priorDocument) : "",
+      };
+    },
+
+    // Only registered/applicable when reconcile() actually changed something
+    // — a no-op reconcile never set hadExistingInlinePolicy.
+    async rollback(ctx) {
+      if (ctx.outputs.hadExistingInlinePolicy === undefined) return;
+
+      const { iam } = awsClients(ctx);
+      const roleName = opts.roleName(ctx.params);
+      const policyName = opts.policyName(ctx.params);
+
+      try {
+        if (ctx.outputs.hadExistingInlinePolicy === false) {
+          await iam.send(new DeleteRolePolicyCommand({ RoleName: roleName, PolicyName: policyName }));
+          return;
+        }
+
+        await iam.send(
+          new PutRolePolicyCommand({
+            RoleName: roleName,
+            PolicyName: policyName,
+            PolicyDocument: ctx.outputs.priorInlinePolicyDocument as string,
+          }),
+        );
+      } catch (err) {
+        if (!isNoSuchEntity(err)) throw err;
+        ctx.log.warn(
+          `Could not roll back inline policy "${policyName}" on role "${roleName}" — role or policy no longer exists`,
+        );
+      }
+    },
+
+    resource(ctx) {
+      const roleName = opts.roleName(ctx.params);
+      const policyName = opts.policyName(ctx.params);
+      return {
+        type: "aws_iam_role_policy",
+        name: `${roleName}:${policyName}`,
+        attributes: { role: roleName, policyName },
       };
     },
   };

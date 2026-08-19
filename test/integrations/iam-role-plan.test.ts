@@ -3,8 +3,15 @@ import type { StepContext } from "../../src/core/define";
 import { iamRoleStep, iamRoleExistsGuardStep, iamAttachRolePolicyStep, iamDetachRolePolicyStep } from "../../src/providers/aws/iam";
 import { trustPolicyStep } from "../../integrations/aws/iam/role/update-trust-policy/steps/trust-policy";
 import type { Params as TrustPolicyParams } from "../../integrations/aws/iam/role/update-trust-policy/params";
-import { inlinePolicyStep } from "../../integrations/aws/iam/role/create-inline-policy-for-role/steps/inline-policy";
+import { desiredPolicyDocument } from "../../integrations/aws/iam/role/create-inline-policy-for-role/params";
 import type { Params as InlinePolicyParams } from "../../integrations/aws/iam/role/create-inline-policy-for-role/params";
+import { iamInlinePolicyStep } from "../../src/providers/aws";
+
+const inlinePolicyStep = iamInlinePolicyStep<InlinePolicyParams>({
+  roleName: (p) => p.ROLE_NAME,
+  policyName: (p) => p.POLICY_NAME,
+  document: (p) => desiredPolicyDocument(p),
+});
 import { rotatePermissionsStep } from "../../integrations/aws/iam/role/rotate-role-permissions/steps/rotate-permissions";
 import type { Params as RotateParams } from "../../integrations/aws/iam/role/rotate-role-permissions/params";
 import { deleteRoleStep } from "../../integrations/aws/iam/role/delete-role/steps/delete-role";
