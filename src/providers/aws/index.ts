@@ -25,4 +25,5 @@ export * from "./errors";
 export * from "./iam";
 export * from "./params";
 export * from "./s3";
+export * from "./secretsmanager";
 export * from "./sts";
