@@ -24,7 +24,7 @@ export default defineIntegration<Params>({
     iamInlinePolicyStep<Params>({
       roleName: (p) => p.ROLE_NAME,
       policyName: (p) => p.POLICY_NAME,
-      document: (p) => desiredPolicyDocument(p),
+      document: (ctx) => desiredPolicyDocument(ctx.params),
     }),
   ],
 

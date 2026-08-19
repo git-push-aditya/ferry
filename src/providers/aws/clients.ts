@@ -4,6 +4,7 @@ import { STSClient } from "@aws-sdk/client-sts";
 import { EC2Client } from "@aws-sdk/client-ec2";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { ECRClient } from "@aws-sdk/client-ecr";
 import type { AwsCredentials } from "./credentials";
 
 export const AWS_PROVIDER_ID = "aws";
@@ -15,6 +16,7 @@ export interface AwsClients {
   ec2: EC2Client;
   ssm: SSMClient;
   secretsManager: SecretsManagerClient;
+  ecr: ECRClient;
   region: string;
 }
 
@@ -51,6 +53,10 @@ export function makeSecretsManagerClient(env: AwsCredentials): SecretsManagerCli
   return new SecretsManagerClient({ region: env.AWS_REGION, credentials: credentials(env) });
 }
 
+export function makeEcrClient(env: AwsCredentials): ECRClient {
+  return new ECRClient({ region: env.AWS_REGION, credentials: credentials(env) });
+}
+
 export function makeAwsClients(env: AwsCredentials): AwsClients {
   return {
     s3: makeS3Client(env),
@@ -59,6 +65,7 @@ export function makeAwsClients(env: AwsCredentials): AwsClients {
     ec2: makeEc2Client(env),
     ssm: makeSsmClient(env),
     secretsManager: makeSecretsManagerClient(env),
+    ecr: makeEcrClient(env),
     region: env.AWS_REGION,
   };
 }

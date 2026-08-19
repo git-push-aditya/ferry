@@ -341,7 +341,10 @@ export function iamDetachRolePolicyStep<P>(opts: RolePolicyAttachmentOptions<P>)
 export interface RoleInlinePolicyOptions<P> {
   roleName(params: P): string;
   policyName(params: P): string;
-  document(params: P): object;
+  // Takes the full context, not just params, since some callers (e.g.
+  // ecr-push-access-for-actions) need ctx.accountId/region to build an ARN
+  // into the document.
+  document(ctx: StepContext<P>): object;
   id?: string;
   title?: string;
 }
@@ -387,7 +390,7 @@ export function iamInlinePolicyStep<P>(opts: RoleInlinePolicyOptions<P>): Step<P
       const { iam } = awsClients(ctx);
       const roleName = opts.roleName(ctx.params);
       const policyName = opts.policyName(ctx.params);
-      const desired = opts.document(ctx.params);
+      const desired = opts.document(ctx);
 
       let hadExisting = false;
       let priorDocument: Record<string, unknown> | undefined;

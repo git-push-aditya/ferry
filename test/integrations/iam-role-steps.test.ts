@@ -23,7 +23,7 @@ import { iamInlinePolicyStep } from "../../src/providers/aws/iam";
 const inlinePolicyStep = iamInlinePolicyStep<InlineParams>({
   roleName: (p) => p.ROLE_NAME,
   policyName: (p) => p.POLICY_NAME,
-  document: (p) => desiredPolicyDocument(p),
+  document: (ctx) => desiredPolicyDocument(ctx.params),
 });
 
 import { rotatePermissionsStep } from "../../integrations/aws/iam/role/rotate-role-permissions/steps/rotate-permissions";
