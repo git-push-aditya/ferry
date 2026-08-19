@@ -591,6 +591,120 @@ export async function listAttachedRolePolicyArns(
   return arns;
 }
 
+export interface RolePolicySetOptions<P> {
+  roleName(params: P): string;
+  /** The complete target set of managed-policy ARNs — not a delta. */
+  desiredArns(params: P): string[];
+  id?: string;
+  title?: string;
+}
+
+/**
+ * Converges a role's full managed-policy-attachment set to exactly the
+ * desired ARNs, in one indivisible operation: the set of attachments to
+ * touch is discovered dynamically against live IAM state at reconcile
+ * time, so this is an aggregate step (like delete-role) rather than a
+ * step-factory over N items.
+ *
+ * Always reconciles (no create()) — the desired state depends on params,
+ * not a static missing/exists check.
+ *
+ * Promoted from aws/iam/role/rotate-role-permissions's local
+ * rotate-permissions step — github/cloudformation-deploy-role-for-actions's
+ * execution-role policy set was this factory's second consumer and
+ * github/github-oidc-spoke-role is its third, crossing this project's own
+ * "two bespoke copies fine, a third promotes" threshold.
+ */
+export function iamConvergePolicyAttachmentsStep<P>(opts: RolePolicySetOptions<P>): Step<P> {
+  return {
+    id: opts.id ?? "converge-policy-attachments",
+    title: opts.title ?? "Converge the role's managed-policy attachments",
+
+    async check() {
+      return "missing";
+    },
+
+    async reconcile(ctx) {
+      const { iam } = awsClients(ctx);
+      const roleName = opts.roleName(ctx.params);
+      const desiredArns = opts.desiredArns(ctx.params);
+
+      const currentArns = await listAttachedRolePolicyArns(iam, roleName);
+      const toAttach = desiredArns.filter((a) => !currentArns.includes(a));
+      const toDetach = currentArns.filter((a) => !desiredArns.includes(a));
+
+      if (toAttach.length === 0 && toDetach.length === 0) {
+        ctx.log.info(`${roleName} already has exactly the desired ${desiredArns.length} policy attachment(s)`);
+        return { executedAttach: JSON.stringify([]), executedDetach: JSON.stringify([]) };
+      }
+
+      // Attach before detach — never leave the role under-permissioned mid-run.
+      const executedAttach: string[] = [];
+      for (const arn of toAttach) {
+        await attachRolePolicy(iam, roleName, arn);
+        executedAttach.push(arn);
+      }
+
+      const executedDetach: string[] = [];
+      for (const arn of toDetach) {
+        await detachRolePolicy(iam, roleName, arn);
+        executedDetach.push(arn);
+      }
+
+      ctx.log.success(`${roleName}: attached ${executedAttach.length}, detached ${executedDetach.length}`);
+
+      return {
+        executedAttach: JSON.stringify(executedAttach),
+        executedDetach: JSON.stringify(executedDetach),
+      };
+    },
+
+    /**
+     * Inverse of what was actually executed, using the EXECUTED lists (not
+     * the originally-computed toAttach/toDetach, which may differ from a
+     * partial failure) — restores exactly the starting attachment set.
+     */
+    async rollback(ctx) {
+      const { iam } = awsClients(ctx);
+      const roleName = opts.roleName(ctx.params);
+      const executedAttach = JSON.parse((ctx.outputs.executedAttach as string) ?? "[]") as string[];
+      const executedDetach = JSON.parse((ctx.outputs.executedDetach as string) ?? "[]") as string[];
+
+      for (const arn of executedDetach) {
+        try {
+          await attachRolePolicy(iam, roleName, arn);
+        } catch (err) {
+          if (!isNoSuchEntity(err)) throw err;
+        }
+      }
+      for (const arn of executedAttach) {
+        try {
+          await detachRolePolicy(iam, roleName, arn);
+        } catch (err) {
+          if (!isNoSuchEntity(err)) throw err;
+        }
+      }
+    },
+
+    resource(ctx) {
+      const roleName = opts.roleName(ctx.params);
+      const desiredArns = opts.desiredArns(ctx.params);
+      const executedAttach = JSON.parse((ctx.outputs.executedAttach as string) ?? "[]") as string[];
+      const executedDetach = JSON.parse((ctx.outputs.executedDetach as string) ?? "[]") as string[];
+      return {
+        type: "aws_iam_role_policy_set",
+        name: roleName,
+        attributes: {
+          role: roleName,
+          attachedCount: String(desiredArns.length),
+          attachedThisRun: String(executedAttach.length),
+          detachedThisRun: String(executedDetach.length),
+        },
+      };
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // aws/iam/user shared factories
 // ---------------------------------------------------------------------------

@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { StepContext } from "../../src/core/define";
 import { executionRoleStep } from "../../integrations/github/cloudformation-deploy-role-for-actions/steps/execution-role";
-import { executionPoliciesStep } from "../../integrations/github/cloudformation-deploy-role-for-actions/steps/execution-policies";
 import { ciRoleCfnPolicyDocument } from "../../integrations/github/cloudformation-deploy-role-for-actions/params";
 import type { Params } from "../../integrations/github/cloudformation-deploy-role-for-actions/params";
+import { iamConvergePolicyAttachmentsStep } from "../../src/providers/aws";
+
+const executionPoliciesStep = iamConvergePolicyAttachmentsStep<Params>({
+  roleName: (p) => p.CFN_EXECUTION_ROLE_NAME,
+  desiredArns: (p) => p.EXECUTION_POLICY_ARNS,
+});
 
 const ACCOUNT = "909317186541";
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };

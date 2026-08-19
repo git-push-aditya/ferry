@@ -32,8 +32,13 @@ const inlinePolicyStep = iamInlinePolicyStep<InlineParams>({
   document: (ctx) => desiredPolicyDocument(ctx.params),
 });
 
-import { rotatePermissionsStep } from "../../integrations/aws/iam/role/rotate-role-permissions/steps/rotate-permissions";
 import type { Params as RotateParams } from "../../integrations/aws/iam/role/rotate-role-permissions/params";
+import { iamConvergePolicyAttachmentsStep } from "../../src/providers/aws/iam";
+
+const rotatePermissionsStep = iamConvergePolicyAttachmentsStep<RotateParams>({
+  roleName: (p) => p.ROLE_NAME,
+  desiredArns: (p) => p.DESIRED_POLICY_ARNS,
+});
 
 import { serviceLinkedRoleStep } from "../../integrations/aws/iam/role/create-service-linked-role/steps/service-linked-role";
 import type { Params as SlrParams } from "../../integrations/aws/iam/role/create-service-linked-role/params";

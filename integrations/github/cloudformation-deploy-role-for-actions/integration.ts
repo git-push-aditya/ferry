@@ -1,8 +1,7 @@
 import type { z } from "zod";
 import { defineIntegration } from "../../../src/core/define";
-import { awsClients, iamInlinePolicyStep, iamRoleExistsGuardStep, roleArn } from "../../../src/providers/aws";
+import { awsClients, iamConvergePolicyAttachmentsStep, iamInlinePolicyStep, iamRoleExistsGuardStep, roleArn } from "../../../src/providers/aws";
 import { ciRoleCfnPolicyDocument, ciRolePolicyName, paramsSchema, type Params } from "./params";
-import { executionPoliciesStep } from "./steps/execution-policies";
 import { executionRoleStep } from "./steps/execution-role";
 import { verify } from "./verify";
 
@@ -33,7 +32,12 @@ export default defineIntegration<Params>({
   steps: [
     iamRoleExistsGuardStep<Params>({ roleName: (p) => p.AWS_ROLE_NAME }),
     executionRoleStep,
-    executionPoliciesStep,
+    iamConvergePolicyAttachmentsStep<Params>({
+      roleName: (p) => p.CFN_EXECUTION_ROLE_NAME,
+      desiredArns: (p) => p.EXECUTION_POLICY_ARNS,
+      id: "execution-role-policies",
+      title: "Converge the execution role's managed-policy attachments",
+    }),
     iamInlinePolicyStep<Params>({
       roleName: (p) => p.AWS_ROLE_NAME,
       policyName: () => ciRolePolicyName(),

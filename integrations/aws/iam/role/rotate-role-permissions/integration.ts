@@ -1,8 +1,7 @@
 import type { z } from "zod";
 import { defineIntegration } from "../../../../../src/core/define";
-import { iamRoleExistsGuardStep, roleArn } from "../../../../../src/providers/aws";
+import { iamConvergePolicyAttachmentsStep, iamRoleExistsGuardStep, roleArn } from "../../../../../src/providers/aws";
 import { paramsSchema, type Params } from "./params";
-import { rotatePermissionsStep } from "./steps/rotate-permissions";
 import { verify } from "./verify";
 
 /**
@@ -26,7 +25,11 @@ export default defineIntegration<Params>({
 
   steps: [
     iamRoleExistsGuardStep<Params>({ roleName: (p) => p.ROLE_NAME }),
-    rotatePermissionsStep,
+    iamConvergePolicyAttachmentsStep<Params>({
+      roleName: (p) => p.ROLE_NAME,
+      desiredArns: (p) => p.DESIRED_POLICY_ARNS,
+      id: "rotate-role-permissions",
+    }),
   ],
 
   verify,
