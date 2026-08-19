@@ -35,6 +35,7 @@ import {
   PutRolePolicyCommand,
   RemoveUserFromGroupCommand,
   UpdateAccessKeyCommand,
+  UpdateAssumeRolePolicyCommand,
   type IAMClient,
 } from "@aws-sdk/client-iam";
 import type { Step, StepContext, StepState } from "../../core/define";
@@ -466,6 +467,90 @@ export function iamInlinePolicyStep<P>(opts: RoleInlinePolicyOptions<P>): Step<P
         type: "aws_iam_role_policy",
         name: `${roleName}:${policyName}`,
         attributes: { role: roleName, policyName },
+      };
+    },
+  };
+}
+
+export interface RoleTrustPolicyOptions<P> {
+  roleName(params: P): string;
+  document(ctx: StepContext<P>): object;
+  id?: string;
+  title?: string;
+}
+
+/**
+ * Whole-document replace, same shape as `s3BucketPolicyStep`: there is no
+ * "add one trust statement" API, so the full document is always supplied.
+ * A role's trust policy is required at creation — `GetRole` always returns
+ * a real `AssumeRolePolicyDocument` — so there is no "no prior config"
+ * branch to special-case here, unlike an inline policy.
+ *
+ * Always reconciles (no create()): the desired document depends on params,
+ * not knowable as a plan-time missing/exists split.
+ *
+ * Promoted from aws/iam/role/update-trust-policy's local trust-policy step
+ * — github/github-oidc-spoke-role is this factory's third consumer
+ * (github/setup-github-actions-oidc-role's own trust-policy-and-attach step
+ * is the second, but stays local since it also handles policy attachment
+ * in the same step — a different shape), crossing this project's own
+ * "two bespoke copies fine, a third promotes" threshold for the plain
+ * whole-document trust-policy replace pattern specifically.
+ */
+export function iamTrustPolicyStep<P>(opts: RoleTrustPolicyOptions<P>): Step<P> {
+  return {
+    id: opts.id ?? "trust-policy",
+    title: opts.title ?? "Reconcile role trust policy",
+
+    async check() {
+      return "missing";
+    },
+
+    async reconcile(ctx) {
+      const { iam } = awsClients(ctx);
+      const roleName = opts.roleName(ctx.params);
+      const desired = opts.document(ctx);
+
+      const before = await iam.send(new GetRoleCommand({ RoleName: roleName }));
+      const rawCurrent = before.Role?.AssumeRolePolicyDocument;
+      const current = rawCurrent ? JSON.parse(decodeURIComponent(rawCurrent)) : {};
+
+      if (stableStringify(current) === stableStringify(desired)) {
+        ctx.log.info(`Trust policy on role "${roleName}" already matches the desired document`);
+        return {};
+      }
+
+      await iam.send(
+        new UpdateAssumeRolePolicyCommand({
+          RoleName: roleName,
+          PolicyDocument: JSON.stringify(desired),
+        }),
+      );
+      ctx.log.success(`Updated trust policy on role "${roleName}"`);
+
+      return { changed: true, priorTrustPolicy: JSON.stringify(current) };
+    },
+
+    // Only registered/applicable when reconcile() actually changed the
+    // document — a no-op reconcile never set priorTrustPolicy.
+    async rollback(ctx) {
+      const prior = ctx.outputs.priorTrustPolicy as string | undefined;
+      if (prior === undefined) return;
+
+      await awsClients(ctx).iam.send(
+        new UpdateAssumeRolePolicyCommand({
+          RoleName: opts.roleName(ctx.params),
+          PolicyDocument: prior,
+        }),
+      );
+    },
+
+    resource(ctx) {
+      const roleName = opts.roleName(ctx.params);
+      return {
+        type: "aws_iam_role_trust_policy",
+        name: roleName,
+        attributes: { role: roleName, changed: String(ctx.outputs.changed === true) },
       };
     },
   };

@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { StepContext } from "../../src/core/define";
 import { iamRoleStep, iamRoleExistsGuardStep, iamAttachRolePolicyStep, iamDetachRolePolicyStep } from "../../src/providers/aws/iam";
-import { trustPolicyStep } from "../../integrations/aws/iam/role/update-trust-policy/steps/trust-policy";
+import { desiredTrustPolicy } from "../../integrations/aws/iam/role/update-trust-policy/params";
 import type { Params as TrustPolicyParams } from "../../integrations/aws/iam/role/update-trust-policy/params";
+import { iamTrustPolicyStep } from "../../src/providers/aws";
+
+const trustPolicyStep = iamTrustPolicyStep<TrustPolicyParams>({
+  roleName: (p) => p.ROLE_NAME,
+  document: (ctx) => desiredTrustPolicy(ctx.params),
+});
 import { desiredPolicyDocument } from "../../integrations/aws/iam/role/create-inline-policy-for-role/params";
 import type { Params as InlinePolicyParams } from "../../integrations/aws/iam/role/create-inline-policy-for-role/params";
 import { iamInlinePolicyStep } from "../../src/providers/aws";

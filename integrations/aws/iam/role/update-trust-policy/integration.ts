@@ -1,7 +1,6 @@
 import { defineIntegration } from "../../../../../src/core/define";
-import { iamRoleExistsGuardStep, roleArn } from "../../../../../src/providers/aws";
-import { paramsSchema, type Params } from "./params";
-import { trustPolicyStep } from "./steps/trust-policy";
+import { iamRoleExistsGuardStep, iamTrustPolicyStep, roleArn } from "../../../../../src/providers/aws";
+import { desiredTrustPolicy, paramsSchema, type Params } from "./params";
 import { verify } from "./verify";
 
 /**
@@ -21,7 +20,10 @@ export default defineIntegration<Params>({
 
   steps: [
     iamRoleExistsGuardStep<Params>({ roleName: (p) => p.ROLE_NAME }),
-    trustPolicyStep,
+    iamTrustPolicyStep<Params>({
+      roleName: (p) => p.ROLE_NAME,
+      document: (ctx) => desiredTrustPolicy(ctx.params),
+    }),
   ],
 
   verify,

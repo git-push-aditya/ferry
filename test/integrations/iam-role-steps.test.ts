@@ -13,8 +13,14 @@ import type { Params as AttachParams } from "../../integrations/aws/iam/role/att
 import { iamDetachRolePolicyStep } from "../../src/providers/aws/iam";
 import type { Params as DetachParams } from "../../integrations/aws/iam/role/detach-policy-from-role/params";
 
-import { trustPolicyStep } from "../../integrations/aws/iam/role/update-trust-policy/steps/trust-policy";
+import { desiredTrustPolicy } from "../../integrations/aws/iam/role/update-trust-policy/params";
 import type { Params as TrustParams } from "../../integrations/aws/iam/role/update-trust-policy/params";
+import { iamTrustPolicyStep } from "../../src/providers/aws/iam";
+
+const trustPolicyStep = iamTrustPolicyStep<TrustParams>({
+  roleName: (p) => p.ROLE_NAME,
+  document: (ctx) => desiredTrustPolicy(ctx.params),
+});
 
 import { desiredPolicyDocument } from "../../integrations/aws/iam/role/create-inline-policy-for-role/params";
 import type { Params as InlineParams } from "../../integrations/aws/iam/role/create-inline-policy-for-role/params";
