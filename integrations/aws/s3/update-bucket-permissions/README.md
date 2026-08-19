@@ -18,6 +18,17 @@ bun run bin/ferry.ts aws/s3/update-bucket-permissions
 | `bucket-public-access-block` | shared with `aws/s3/create-bucket` — always reconciled, defaults to blocking |
 | `verify` | confirms the stored policy matches the desired document, and confirms public-access-block live |
 
+## Composing a CI artifact pipeline to S3
+
+There is no dedicated "CI artifact pipeline to S3" integration — it needs
+no new code. Compose `aws/s3/create-bucket` + this integration (a policy
+statement granting `s3:PutObject`/`s3:GetObject` on `bucket/prefix/*` with
+`Principal` set to a GitHub Actions OIDC role's ARN from
+`github/setup-github-actions-oidc-role`) + a scoped inline policy on that
+role via `aws/iam/role/create-inline-policy-for-role`. See
+`docs/plan/aws-github.md` for the reasoning behind not building this as a
+separate integration.
+
 ## Gotchas
 
 **ACLs are out of scope.** AWS has been steering buckets away from ACLs since

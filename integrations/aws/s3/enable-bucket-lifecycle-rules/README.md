@@ -16,7 +16,23 @@ bun run bin/ferry.ts aws/s3/enable-bucket-lifecycle-rules
 | `bucket-lifecycle` | always reconciles — the desired rule set depends on `LIFECYCLE_RULES_JSON` |
 | `verify` | reads the configuration back and confirms it matches the desired set exactly |
 
+## Composing a GitHub Actions cache bucket
+
+There is no dedicated "Actions cache bucket" integration — it needs no new
+code. Compose `aws/s3/create-bucket` + this integration (an expiry rule
+for cached artifacts, with an explicit deterministic `ID` per rule — see
+the gotcha below) + a scoped inline policy via `aws/iam/role/create-
+inline-policy-for-role` for whichever role writes into it (a self-hosted
+runner's instance role, or a custom `actions/cache`-alternative). See
+`docs/plan/aws-github.md` for the reasoning behind not building this as a
+separate integration.
+
 ## Gotchas
+
+**Always supply an explicit `ID` per rule in `LIFECYCLE_RULES_JSON`.** If
+you omit it, S3 auto-generates one, which breaks any future diff-based
+comparison against the same desired document — use a stable, deterministic
+id you choose yourself.
 
 **`PutBucketLifecycleConfiguration` replaces the whole document.** AWS's own
 docs: "this will overwrite an existing lifecycle configuration... they must be
