@@ -15,7 +15,8 @@ import type { Params as TagParams } from "../../integrations/aws/ec2/tag-instanc
 import { updateInstanceTypeStep } from "../../integrations/aws/ec2/update-instance-type/steps/update-instance-type";
 import type { Params as UpdateTypeParams } from "../../integrations/aws/ec2/update-instance-type/params";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 
 type Command = { constructor: { name: string }; input: Record<string, unknown> };

@@ -4,7 +4,8 @@ import { oidcProviderAndRoleStep } from "../../integrations/github/setup-github-
 import { trustPolicyAndAttachStep } from "../../integrations/github/setup-github-actions-oidc-role/steps/trust-policy-and-attach";
 import { oidcProviderArn, type Params } from "../../integrations/github/setup-github-actions-oidc-role/params";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 type FakeCommand = { constructor: { name: string }; input: Record<string, unknown> };
 

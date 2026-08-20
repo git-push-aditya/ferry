@@ -5,7 +5,8 @@ import { bucketNotificationStep } from "../../integrations/snowflake/snowpipe-au
 import { notificationEntryId } from "../../integrations/snowflake/snowpipe-auto-ingest/params";
 import type { Params } from "../../integrations/snowflake/snowpipe-auto-ingest/params";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 
 const PARAMS: Params = {

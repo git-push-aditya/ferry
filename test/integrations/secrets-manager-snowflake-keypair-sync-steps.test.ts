@@ -3,7 +3,8 @@ import type { StepContext } from "../../src/core/define";
 import { syncCredentialStep } from "../../integrations/snowflake/secrets-manager-snowflake-keypair-sync/steps/sync-credential";
 import type { Params } from "../../integrations/snowflake/secrets-manager-snowflake-keypair-sync/params";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 
 function awsError(name: string): Error {

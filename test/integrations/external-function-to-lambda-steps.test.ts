@@ -6,7 +6,8 @@ import { externalFunctionStep } from "../../integrations/snowflake/external-func
 import { finalTrustPolicy, functionSignature } from "../../integrations/snowflake/external-function-to-lambda/params";
 import type { Params } from "../../integrations/snowflake/external-function-to-lambda/params";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 
 function awsError(name: string): Error {

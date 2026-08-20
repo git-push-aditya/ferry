@@ -4,7 +4,8 @@ import { ecrRepoStep } from "../../integrations/github/ecr-push-access-for-actio
 import { ecrPushPolicyDocument, inlinePolicyName } from "../../integrations/github/ecr-push-access-for-actions/params";
 import type { Params } from "../../integrations/github/ecr-push-access-for-actions/params";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 
 function awsError(name: string): Error {

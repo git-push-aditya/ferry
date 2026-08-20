@@ -13,7 +13,8 @@ import type { Params as GrantAccessParams } from "../../integrations/snowflake/g
 import { auditStep } from "../../integrations/snowflake/audit-user-access/steps/audit";
 import type { Params as AuditParams } from "../../integrations/snowflake/audit-user-access/params";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 
 /** dry-run context: check() only — create()/reconcile() must never run here. */

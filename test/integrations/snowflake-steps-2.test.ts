@@ -17,7 +17,8 @@ import { iamPolicyStep } from "../../integrations/snowflake/create-storage-s3-in
 import type { Params as StorageParams } from "../../integrations/snowflake/create-storage-s3-integration/params";
 import { integrationRolePolicy } from "../../integrations/snowflake/create-storage-s3-integration/policies";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 
 function sfCtx<P>(

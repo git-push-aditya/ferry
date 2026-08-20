@@ -34,7 +34,8 @@ import type { Params as TagRoleParams } from "../../integrations/aws/iam/role/ta
 import { auditStep } from "../../integrations/aws/iam/role/audit-unused-roles/steps/audit";
 import type { Params as AuditParams } from "../../integrations/aws/iam/role/audit-unused-roles/params";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 type Command = { constructor: { name: string }; input: Record<string, unknown> };
 
