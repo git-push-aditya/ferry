@@ -6,9 +6,14 @@ import type { SnowflakeConnection, SnowflakeRow } from "./client";
  * near-miss name as "already exists" and silently skip registering rollback,
  * so match the returned name exactly (Snowflake upper-cases bare identifiers).
  */
-export function showMatchesExactly(rows: SnowflakeRow[], name: string): boolean {
+/** The exact row SHOW ... LIKE '<name>' matched, if any — see showMatchesExactly for why exact matching matters. */
+export function findExactMatch(rows: SnowflakeRow[], name: string): SnowflakeRow | undefined {
   const target = name.toUpperCase();
-  return rows.some((row) => String(row.name ?? row.NAME ?? "").toUpperCase() === target);
+  return rows.find((row) => String(row.name ?? row.NAME ?? "").toUpperCase() === target);
+}
+
+export function showMatchesExactly(rows: SnowflakeRow[], name: string): boolean {
+  return findExactMatch(rows, name) !== undefined;
 }
 
 /** Flattens `DESC INTEGRATION` / `DESC STAGE` output into property → value. */
@@ -24,7 +29,7 @@ export function descProperties(rows: SnowflakeRow[]): Map<string, string> {
 
 export async function showsExactly(
   conn: SnowflakeConnection,
-  objectType: "INTEGRATIONS" | "STAGES",
+  objectType: "INTEGRATIONS" | "STAGES" | "PIPES",
   name: string,
 ): Promise<boolean> {
   return showMatchesExactly(await conn.runQuery(`SHOW ${objectType} LIKE '${name}';`), name);

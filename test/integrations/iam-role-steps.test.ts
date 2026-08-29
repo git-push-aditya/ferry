@@ -13,14 +13,32 @@ import type { Params as AttachParams } from "../../integrations/aws/iam/role/att
 import { iamDetachRolePolicyStep } from "../../src/providers/aws/iam";
 import type { Params as DetachParams } from "../../integrations/aws/iam/role/detach-policy-from-role/params";
 
-import { trustPolicyStep } from "../../integrations/aws/iam/role/update-trust-policy/steps/trust-policy";
+import { desiredTrustPolicy } from "../../integrations/aws/iam/role/update-trust-policy/params";
 import type { Params as TrustParams } from "../../integrations/aws/iam/role/update-trust-policy/params";
+import { iamTrustPolicyStep } from "../../src/providers/aws/iam";
 
-import { inlinePolicyStep } from "../../integrations/aws/iam/role/create-inline-policy-for-role/steps/inline-policy";
+const trustPolicyStep = iamTrustPolicyStep<TrustParams>({
+  roleName: (p) => p.ROLE_NAME,
+  document: (ctx) => desiredTrustPolicy(ctx.params),
+});
+
+import { desiredPolicyDocument } from "../../integrations/aws/iam/role/create-inline-policy-for-role/params";
 import type { Params as InlineParams } from "../../integrations/aws/iam/role/create-inline-policy-for-role/params";
+import { iamInlinePolicyStep } from "../../src/providers/aws/iam";
 
-import { rotatePermissionsStep } from "../../integrations/aws/iam/role/rotate-role-permissions/steps/rotate-permissions";
+const inlinePolicyStep = iamInlinePolicyStep<InlineParams>({
+  roleName: (p) => p.ROLE_NAME,
+  policyName: (p) => p.POLICY_NAME,
+  document: (ctx) => desiredPolicyDocument(ctx.params),
+});
+
 import type { Params as RotateParams } from "../../integrations/aws/iam/role/rotate-role-permissions/params";
+import { iamConvergePolicyAttachmentsStep } from "../../src/providers/aws/iam";
+
+const rotatePermissionsStep = iamConvergePolicyAttachmentsStep<RotateParams>({
+  roleName: (p) => p.ROLE_NAME,
+  desiredArns: (p) => p.DESIRED_POLICY_ARNS,
+});
 
 import { serviceLinkedRoleStep } from "../../integrations/aws/iam/role/create-service-linked-role/steps/service-linked-role";
 import type { Params as SlrParams } from "../../integrations/aws/iam/role/create-service-linked-role/params";
@@ -31,7 +49,8 @@ import type { Params as TagParams } from "../../integrations/aws/iam/role/tag-ro
 import { auditStep } from "../../integrations/aws/iam/role/audit-unused-roles/steps/audit";
 import type { Params as AuditParams } from "../../integrations/aws/iam/role/audit-unused-roles/params";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 
 function awsError(name: string, httpStatusCode = 404): Error {

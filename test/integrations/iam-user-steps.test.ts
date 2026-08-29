@@ -46,7 +46,8 @@ import type { Params as OffboardUserParams } from "../../integrations/aws/iam/us
 
 import { iamUserTeardownStep } from "../../src/providers/aws/iam";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 
 type FakeCommand = { constructor: { name: string }; input: Record<string, unknown> };

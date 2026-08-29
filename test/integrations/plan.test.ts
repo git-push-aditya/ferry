@@ -11,7 +11,8 @@ import { awsCredentialsSchema } from "../../src/providers/aws";
 import { snowflakeCredentialsSchema } from "../../src/providers/snowflake";
 
 const REPO_INTEGRATIONS = path.join(import.meta.dir, "../../integrations");
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 
 /**
  * Command names that change something. The dry-run assertions below check this

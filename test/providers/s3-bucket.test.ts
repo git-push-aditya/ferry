@@ -37,7 +37,8 @@ import {
 } from "../../src/providers/aws/s3";
 import type { StepContext } from "../../src/core/define";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 
 interface Sent {
   name: string;

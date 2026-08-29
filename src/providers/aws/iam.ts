@@ -9,6 +9,7 @@ import {
   DeleteAccessKeyCommand,
   DeleteLoginProfileCommand,
   DeleteRoleCommand,
+  DeleteRolePolicyCommand,
   DeleteServiceSpecificCredentialCommand,
   DeleteSigningCertificateCommand,
   DeleteSSHPublicKeyCommand,
@@ -20,6 +21,7 @@ import {
   GetLoginProfileCommand,
   GetPolicyCommand,
   GetRoleCommand,
+  GetRolePolicyCommand,
   GetUserCommand,
   ListAccessKeysCommand,
   ListAttachedRolePoliciesCommand,
@@ -30,8 +32,10 @@ import {
   ListSigningCertificatesCommand,
   ListSSHPublicKeysCommand,
   ListUserPoliciesCommand,
+  PutRolePolicyCommand,
   RemoveUserFromGroupCommand,
   UpdateAccessKeyCommand,
+  UpdateAssumeRolePolicyCommand,
   type IAMClient,
 } from "@aws-sdk/client-iam";
 import type { Step, StepContext, StepState } from "../../core/define";
@@ -335,6 +339,223 @@ export function iamDetachRolePolicyStep<P>(opts: RolePolicyAttachmentOptions<P>)
   };
 }
 
+export interface RoleInlinePolicyOptions<P> {
+  roleName(params: P): string;
+  policyName(params: P): string;
+  // Takes the full context, not just params, since some callers (e.g.
+  // ecr-push-access-for-actions) need ctx.accountId/region to build an ARN
+  // into the document.
+  document(ctx: StepContext<P>): object;
+  id?: string;
+  title?: string;
+}
+
+/** Stable-key JSON compare so key order doesn't produce a false diff. */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * Reconciles a named inline policy on a role to an exact desired document.
+ * `PutRolePolicy` is documented as "adds *or updates*" — inherently a
+ * create-or-replace call under that policy name, so this always reconciles
+ * rather than splitting into create()-vs-reconcile(): the desired document
+ * depends on params, not knowable as a plan-time missing/exists split.
+ *
+ * Promoted from aws/iam/role/create-inline-policy-for-role's local
+ * inline-policy step — this is its second consumer
+ * (ecr-push-access-for-actions is the first new one), which is this
+ * project's own "two bespoke copies fine, a third promotes" threshold.
+ * `create-inline-policy-for-role` itself now just calls this factory.
+ */
+export function iamInlinePolicyStep<P>(opts: RoleInlinePolicyOptions<P>): Step<P> {
+  return {
+    id: opts.id ?? "inline-policy",
+    title: opts.title ?? "Reconcile inline policy on role",
+
+    async check() {
+      // The desired document isn't knowable as a plan-time missing/exists
+      // split — it depends on params — so this always reconciles, same
+      // shape as trustPolicyStep in create-storage-s3-integration.
+      return "missing";
+    },
+
+    async reconcile(ctx) {
+      const { iam } = awsClients(ctx);
+      const roleName = opts.roleName(ctx.params);
+      const policyName = opts.policyName(ctx.params);
+      const desired = opts.document(ctx);
+
+      let hadExisting = false;
+      let priorDocument: Record<string, unknown> | undefined;
+      try {
+        const before = await iam.send(
+          new GetRolePolicyCommand({ RoleName: roleName, PolicyName: policyName }),
+        );
+        hadExisting = true;
+        priorDocument = before.PolicyDocument
+          ? JSON.parse(decodeURIComponent(before.PolicyDocument))
+          : {};
+      } catch (err) {
+        if (!isNoSuchEntity(err)) throw err;
+      }
+
+      if (hadExisting && stableStringify(priorDocument) === stableStringify(desired)) {
+        ctx.log.info(
+          `Inline policy "${policyName}" on role "${roleName}" already matches the desired document`,
+        );
+        return {};
+      }
+
+      await iam.send(
+        new PutRolePolicyCommand({
+          RoleName: roleName,
+          PolicyName: policyName,
+          PolicyDocument: JSON.stringify(desired),
+        }),
+      );
+      ctx.log.success(`Set inline policy "${policyName}" on role "${roleName}"`);
+
+      return {
+        changed: true,
+        hadExistingInlinePolicy: hadExisting,
+        priorInlinePolicyDocument: hadExisting ? JSON.stringify(priorDocument) : "",
+      };
+    },
+
+    // Only registered/applicable when reconcile() actually changed something
+    // — a no-op reconcile never set hadExistingInlinePolicy.
+    async rollback(ctx) {
+      if (ctx.outputs.hadExistingInlinePolicy === undefined) return;
+
+      const { iam } = awsClients(ctx);
+      const roleName = opts.roleName(ctx.params);
+      const policyName = opts.policyName(ctx.params);
+
+      try {
+        if (ctx.outputs.hadExistingInlinePolicy === false) {
+          await iam.send(new DeleteRolePolicyCommand({ RoleName: roleName, PolicyName: policyName }));
+          return;
+        }
+
+        await iam.send(
+          new PutRolePolicyCommand({
+            RoleName: roleName,
+            PolicyName: policyName,
+            PolicyDocument: ctx.outputs.priorInlinePolicyDocument as string,
+          }),
+        );
+      } catch (err) {
+        if (!isNoSuchEntity(err)) throw err;
+        ctx.log.warn(
+          `Could not roll back inline policy "${policyName}" on role "${roleName}" — role or policy no longer exists`,
+        );
+      }
+    },
+
+    resource(ctx) {
+      const roleName = opts.roleName(ctx.params);
+      const policyName = opts.policyName(ctx.params);
+      return {
+        type: "aws_iam_role_policy",
+        name: `${roleName}:${policyName}`,
+        attributes: { role: roleName, policyName },
+      };
+    },
+  };
+}
+
+export interface RoleTrustPolicyOptions<P> {
+  roleName(params: P): string;
+  document(ctx: StepContext<P>): object;
+  id?: string;
+  title?: string;
+}
+
+/**
+ * Whole-document replace, same shape as `s3BucketPolicyStep`: there is no
+ * "add one trust statement" API, so the full document is always supplied.
+ * A role's trust policy is required at creation — `GetRole` always returns
+ * a real `AssumeRolePolicyDocument` — so there is no "no prior config"
+ * branch to special-case here, unlike an inline policy.
+ *
+ * Always reconciles (no create()): the desired document depends on params,
+ * not knowable as a plan-time missing/exists split.
+ *
+ * Promoted from aws/iam/role/update-trust-policy's local trust-policy step
+ * — github/github-oidc-spoke-role is this factory's third consumer
+ * (github/setup-github-actions-oidc-role's own trust-policy-and-attach step
+ * is the second, but stays local since it also handles policy attachment
+ * in the same step — a different shape), crossing this project's own
+ * "two bespoke copies fine, a third promotes" threshold for the plain
+ * whole-document trust-policy replace pattern specifically.
+ */
+export function iamTrustPolicyStep<P>(opts: RoleTrustPolicyOptions<P>): Step<P> {
+  return {
+    id: opts.id ?? "trust-policy",
+    title: opts.title ?? "Reconcile role trust policy",
+
+    async check() {
+      return "missing";
+    },
+
+    async reconcile(ctx) {
+      const { iam } = awsClients(ctx);
+      const roleName = opts.roleName(ctx.params);
+      const desired = opts.document(ctx);
+
+      const before = await iam.send(new GetRoleCommand({ RoleName: roleName }));
+      const rawCurrent = before.Role?.AssumeRolePolicyDocument;
+      const current = rawCurrent ? JSON.parse(decodeURIComponent(rawCurrent)) : {};
+
+      if (stableStringify(current) === stableStringify(desired)) {
+        ctx.log.info(`Trust policy on role "${roleName}" already matches the desired document`);
+        return {};
+      }
+
+      await iam.send(
+        new UpdateAssumeRolePolicyCommand({
+          RoleName: roleName,
+          PolicyDocument: JSON.stringify(desired),
+        }),
+      );
+      ctx.log.success(`Updated trust policy on role "${roleName}"`);
+
+      return { changed: true, priorTrustPolicy: JSON.stringify(current) };
+    },
+
+    // Only registered/applicable when reconcile() actually changed the
+    // document — a no-op reconcile never set priorTrustPolicy.
+    async rollback(ctx) {
+      const prior = ctx.outputs.priorTrustPolicy as string | undefined;
+      if (prior === undefined) return;
+
+      await awsClients(ctx).iam.send(
+        new UpdateAssumeRolePolicyCommand({
+          RoleName: opts.roleName(ctx.params),
+          PolicyDocument: prior,
+        }),
+      );
+    },
+
+    resource(ctx) {
+      const roleName = opts.roleName(ctx.params);
+      return {
+        type: "aws_iam_role_trust_policy",
+        name: roleName,
+        attributes: { role: roleName, changed: String(ctx.outputs.changed === true) },
+      };
+    },
+  };
+}
+
 /** Thin wrapper, not a Step — used by rotate-role-permissions to converge a full policy set. */
 export async function attachRolePolicy(
   iam: IAMClient,
@@ -368,6 +589,120 @@ export async function listAttachedRolePolicyArns(
     marker = page.IsTruncated ? page.Marker : undefined;
   } while (marker);
   return arns;
+}
+
+export interface RolePolicySetOptions<P> {
+  roleName(params: P): string;
+  /** The complete target set of managed-policy ARNs — not a delta. */
+  desiredArns(params: P): string[];
+  id?: string;
+  title?: string;
+}
+
+/**
+ * Converges a role's full managed-policy-attachment set to exactly the
+ * desired ARNs, in one indivisible operation: the set of attachments to
+ * touch is discovered dynamically against live IAM state at reconcile
+ * time, so this is an aggregate step (like delete-role) rather than a
+ * step-factory over N items.
+ *
+ * Always reconciles (no create()) — the desired state depends on params,
+ * not a static missing/exists check.
+ *
+ * Promoted from aws/iam/role/rotate-role-permissions's local
+ * rotate-permissions step — github/cloudformation-deploy-role-for-actions's
+ * execution-role policy set was this factory's second consumer and
+ * github/github-oidc-spoke-role is its third, crossing this project's own
+ * "two bespoke copies fine, a third promotes" threshold.
+ */
+export function iamConvergePolicyAttachmentsStep<P>(opts: RolePolicySetOptions<P>): Step<P> {
+  return {
+    id: opts.id ?? "converge-policy-attachments",
+    title: opts.title ?? "Converge the role's managed-policy attachments",
+
+    async check() {
+      return "missing";
+    },
+
+    async reconcile(ctx) {
+      const { iam } = awsClients(ctx);
+      const roleName = opts.roleName(ctx.params);
+      const desiredArns = opts.desiredArns(ctx.params);
+
+      const currentArns = await listAttachedRolePolicyArns(iam, roleName);
+      const toAttach = desiredArns.filter((a) => !currentArns.includes(a));
+      const toDetach = currentArns.filter((a) => !desiredArns.includes(a));
+
+      if (toAttach.length === 0 && toDetach.length === 0) {
+        ctx.log.info(`${roleName} already has exactly the desired ${desiredArns.length} policy attachment(s)`);
+        return { executedAttach: JSON.stringify([]), executedDetach: JSON.stringify([]) };
+      }
+
+      // Attach before detach — never leave the role under-permissioned mid-run.
+      const executedAttach: string[] = [];
+      for (const arn of toAttach) {
+        await attachRolePolicy(iam, roleName, arn);
+        executedAttach.push(arn);
+      }
+
+      const executedDetach: string[] = [];
+      for (const arn of toDetach) {
+        await detachRolePolicy(iam, roleName, arn);
+        executedDetach.push(arn);
+      }
+
+      ctx.log.success(`${roleName}: attached ${executedAttach.length}, detached ${executedDetach.length}`);
+
+      return {
+        executedAttach: JSON.stringify(executedAttach),
+        executedDetach: JSON.stringify(executedDetach),
+      };
+    },
+
+    /**
+     * Inverse of what was actually executed, using the EXECUTED lists (not
+     * the originally-computed toAttach/toDetach, which may differ from a
+     * partial failure) — restores exactly the starting attachment set.
+     */
+    async rollback(ctx) {
+      const { iam } = awsClients(ctx);
+      const roleName = opts.roleName(ctx.params);
+      const executedAttach = JSON.parse((ctx.outputs.executedAttach as string) ?? "[]") as string[];
+      const executedDetach = JSON.parse((ctx.outputs.executedDetach as string) ?? "[]") as string[];
+
+      for (const arn of executedDetach) {
+        try {
+          await attachRolePolicy(iam, roleName, arn);
+        } catch (err) {
+          if (!isNoSuchEntity(err)) throw err;
+        }
+      }
+      for (const arn of executedAttach) {
+        try {
+          await detachRolePolicy(iam, roleName, arn);
+        } catch (err) {
+          if (!isNoSuchEntity(err)) throw err;
+        }
+      }
+    },
+
+    resource(ctx) {
+      const roleName = opts.roleName(ctx.params);
+      const desiredArns = opts.desiredArns(ctx.params);
+      const executedAttach = JSON.parse((ctx.outputs.executedAttach as string) ?? "[]") as string[];
+      const executedDetach = JSON.parse((ctx.outputs.executedDetach as string) ?? "[]") as string[];
+      return {
+        type: "aws_iam_role_policy_set",
+        name: roleName,
+        attributes: {
+          role: roleName,
+          attachedCount: String(desiredArns.length),
+          attachedThisRun: String(executedAttach.length),
+          detachedThisRun: String(executedDetach.length),
+        },
+      };
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

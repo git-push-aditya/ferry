@@ -17,7 +17,8 @@ import type { Params as CreateRoleParams } from "../../integrations/snowflake/cr
 import { grantStep } from "../../integrations/snowflake/grant-role-to-user/steps/grant";
 import type { Params as GrantParams } from "../../integrations/snowflake/grant-role-to-user/params";
 
-const ACCOUNT = "909317186541";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 
 function sfCtx<P>(

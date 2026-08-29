@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { backendUserPolicy } from "../../integrations/aws/s3/create-backend-s3-user/policies";
+import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
 import {
   finalRoleTrustPolicy,
   initialRoleTrustPolicy,
@@ -35,12 +36,12 @@ describe("integrationRolePolicy (artifact A)", () => {
 
 describe("initialRoleTrustPolicy (artifact B)", () => {
   test("trusts the account root with no external-id condition", () => {
-    expect(initialRoleTrustPolicy("909317186541")).toEqual({
+    expect(initialRoleTrustPolicy(TEST_AWS_ACCOUNT)).toEqual({
       Version: "2012-10-17",
       Statement: [
         {
           Effect: "Allow",
-          Principal: { AWS: "arn:aws:iam::909317186541:root" },
+          Principal: { AWS: `arn:aws:iam::${TEST_AWS_ACCOUNT}:root` },
           Action: "sts:AssumeRole",
         },
       ],

@@ -3,6 +3,17 @@
 Lets Snowflake write query results to S3 as CSV through an external stage, and
 proves it by actually doing so.
 
+**This integration already covers "unload to S3," not just "load from
+S3."** Its own `verify()` step runs `COPY INTO @stage/setup_test FROM
+(SELECT CURRENT_TIMESTAMP)` — that's Snowflake → S3, an unload, not a
+load — and the default `ACCESS_MODE=read-write` already grants
+`PutObject`/`DeleteObject`, exactly what unloading needs. The stage this
+integration creates is bidirectional: the reverse direction (`COPY INTO
+mytable FROM @stage`, a load) is something a caller does afterward with
+the same stage, and isn't itself exercised here. If you were looking for
+a separate "unload pipeline" integration — this is it; there's nothing
+else to build (see `docs/plan/aws-snowflake.md` for the fuller reasoning).
+
 ```bash
 bun run setup:integration -- --dry-run
 bun run setup:integration
