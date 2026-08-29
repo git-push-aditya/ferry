@@ -1,3 +1,11 @@
+/**
+ * Report retention: nothing in Ferry cleans `output/` up. Reports are written
+ * 0600 and gitignored, but they accumulate and they name real resources. That
+ * is a deliberate choice -- Ferry has no state file and no background process,
+ * so it does not manage files after writing them -- but it means the operator
+ * owns retention. Reports written before the Phase 1 refactor predate mask()
+ * and could contain unmasked secrets; those have been purged from this repo.
+ */
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
