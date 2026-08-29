@@ -24,42 +24,6 @@ export async function repoState(client: GithubClient, owner: string, repo: strin
   throw new GithubApiError("GET", path, res.status, res.data);
 }
 
-/**
- * Precondition step for integrations that operate on a repo they do not
- * create (collaborators, branch protection, secrets, webhooks, ...). Mirrors
- * iamRoleExistsGuardStep: "missing" folds to "conflict" here because this
- * step declares no create() — without this, a missing repo would silently
- * plan a "skip" and the real failure would only surface as a raw 404
- * partway through apply.
- */
-export function githubRepoExistsGuardStep<P>(
-  opts: RepoIdentity<P> & { id?: string; title?: string },
-): Step<P> {
-  return {
-    id: opts.id ?? "github-repo-exists",
-    title: opts.title ?? "Confirm the GitHub repo already exists",
-
-    async check(ctx) {
-      const { rest } = githubClients(ctx);
-      const owner = opts.owner(ctx.params);
-      const repo = opts.repo(ctx.params);
-      const state = await repoState(rest, owner, repo);
-      if (state === "missing") {
-        ctx.log.warn(
-          `Repo "${owner}/${repo}" does not exist. This integration operates on an existing repo ` +
-            `and does not create one — create it first (gh repo create) if you need it.`,
-        );
-        return "conflict";
-      }
-      return state;
-    },
-
-    async rollback() {
-      // A read-only precondition changes nothing, so there is nothing to undo.
-    },
-  };
-}
-
 export interface RepoStepOptions<P> extends RepoIdentity<P> {
   /** "org" posts to /orgs/{owner}/repos; "user" posts to /user/repos (the authenticated account). */
   ownerType(params: P): "user" | "org";
