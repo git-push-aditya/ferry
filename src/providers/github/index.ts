@@ -19,4 +19,5 @@ export * from "./errors";
 export * from "./params";
 export * from "./repos";
 export * from "./secrets";
+export * from "./runners";
 export * from "./webhooks";

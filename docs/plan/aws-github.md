@@ -489,6 +489,17 @@ follow-up, not an assumption baked into this plan).
 
 ## 7. self-hosted-runner-registration
 
+> **BUILT — Phase 2.5 step 3.** See `integrations/github/self-hosted-runner-registration/`.
+> The design question this section flagged (extend `launch-instance`'s params
+> vs. duplicate its launch logic) was resolved by **extending**: the step was
+> promoted to a shared `ec2LaunchStep` factory in `src/providers/aws/ec2.ts`
+> with optional `userData` and `iamInstanceProfileArn` accessors, and the
+> `aws/ec2/launch-instance` integration itself was cut. One deviation from the
+> plan below: rollback deregisters the runner *after* terminating the instance,
+> not before, because the runner id survives in `ctx.outputs` — see that
+> integration's README.
+
+
 This is the one task in this plan requiring a genuinely new EC2-side
 capability. **Confirmed real gap**: `aws/ec2/launch-instance`'s current
 params (`LOGICAL_NAME`, `AMI_ID`, `INSTANCE_TYPE`, `SUBNET_ID`,

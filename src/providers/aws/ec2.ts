@@ -12,7 +12,7 @@ import {
   type EC2Client,
   type Tag,
 } from "@aws-sdk/client-ec2";
-import type { Step } from "../../core/define";
+import type { Step, StepContext } from "../../core/define";
 import { pollUntil } from "../../core/wait";
 import type { Logger } from "../../core/logger";
 import { awsClients } from "./clients";
@@ -171,6 +171,20 @@ export interface Ec2LaunchOptions<P> {
    */
   clientTokenOverride?(params: P): string | undefined;
 
+  /**
+   * Cloud-init / shell script run at first boot. Passed as plain text; the
+   * SDK base64-encodes it. Added for self-hosted-runner-registration, which
+   * needs the instance to start the runner binary on boot.
+   */
+  userData?(ctx: StepContext<P>): string | undefined;
+  /**
+   * An IAM **instance profile** ARN, not a role ARN. EC2 delivers credentials
+   * through a profile; a bare role cannot be attached to an instance.
+   * Resolved from ctx rather than params because it is usually an earlier
+   * step's output, not something the caller can know up front.
+   */
+  iamInstanceProfileArn?(ctx: StepContext<P>): string | undefined;
+
   id?: string;
   title?: string;
 }
@@ -228,6 +242,14 @@ export function ec2LaunchStep<P>(opts: Ec2LaunchOptions<P>): Step<P> {
           SecurityGroupIds: opts.securityGroupIds(ctx.params),
           KeyName: opts.keyPairName?.(ctx.params),
           ClientToken: clientToken,
+          UserData: (() => {
+            const script = opts.userData?.(ctx);
+            return script ? Buffer.from(script, "utf-8").toString("base64") : undefined;
+          })(),
+          IamInstanceProfile: (() => {
+            const arn = opts.iamInstanceProfileArn?.(ctx);
+            return arn ? { Arn: arn } : undefined;
+          })(),
           TagSpecifications: [
             {
               ResourceType: "instance",

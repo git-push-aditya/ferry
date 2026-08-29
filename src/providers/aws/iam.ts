@@ -1,4 +1,9 @@
 import {
+  AddRoleToInstanceProfileCommand,
+  CreateInstanceProfileCommand,
+  DeleteInstanceProfileCommand,
+  GetInstanceProfileCommand,
+  RemoveRoleFromInstanceProfileCommand,
   AddUserToGroupCommand,
   AttachRolePolicyCommand,
   AttachUserPolicyCommand,
@@ -1420,6 +1425,163 @@ export function iamUserTeardownStep<P>(opts: UserStepOptions<P>): Step<P> {
           inlinePolicyCount: String(summary.inlinePolicyCount ?? 0),
         },
       };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Instance profiles
+//
+// EC2 delivers IAM credentials to an instance through an instance *profile*,
+// never a bare role -- a distinction that is easy to miss because the console
+// creates the profile implicitly and shows you only the role. Anything
+// launching an instance that needs AWS access has to create both.
+// ---------------------------------------------------------------------------
+
+/** Reads an instance profile's ARN, or undefined if it does not exist. */
+export async function instanceProfileArn(
+  iam: IAMClient,
+  profileName: string,
+): Promise<string | undefined> {
+  try {
+    const got = await iam.send(new GetInstanceProfileCommand({ InstanceProfileName: profileName }));
+    return got.InstanceProfile?.Arn;
+  } catch (err) {
+    if (isNoSuchEntity(err)) return undefined;
+    throw err;
+  }
+}
+
+/** True if the named role is already attached to the named instance profile. */
+export async function instanceProfileHasRole(
+  iam: IAMClient,
+  profileName: string,
+  roleName: string,
+): Promise<boolean> {
+  try {
+    const got = await iam.send(new GetInstanceProfileCommand({ InstanceProfileName: profileName }));
+    return (got.InstanceProfile?.Roles ?? []).some((r) => r.RoleName === roleName);
+  } catch (err) {
+    if (isNoSuchEntity(err)) return false;
+    throw err;
+  }
+}
+
+export interface InstanceProfileStepOptions<P> {
+  profileName(params: P): string;
+  /** The role to attach. An instance profile holds at most one. */
+  roleName(params: P): string;
+  path?(params: P): string | undefined;
+  id?: string;
+  title?: string;
+}
+
+/**
+ * Create an instance profile and attach one role to it.
+ *
+ * Two AWS calls, but one logical resource: a profile with no role in it is
+ * useless, so `check()` reports `exists` only when both the profile is
+ * present AND the role is attached. A profile that exists without the role
+ * (a half-finished earlier run, or one made by hand) reports `missing`, and
+ * `create()` is written to tolerate the profile already being there.
+ *
+ * `rollback()` detaches before deleting, because AWS refuses to delete a
+ * profile that still holds a role.
+ */
+export function iamInstanceProfileStep<P>(opts: InstanceProfileStepOptions<P>): Step<P> {
+  const profile = (ctx: StepContext<P>) => opts.profileName(ctx.params);
+  const role = (ctx: StepContext<P>) => opts.roleName(ctx.params);
+
+  return {
+    id: opts.id ?? "iam-instance-profile",
+    title: opts.title ?? "Create the EC2 instance profile",
+
+    async check(ctx) {
+      const { iam } = awsClients(ctx);
+      const arn = await instanceProfileArn(iam, profile(ctx));
+      if (!arn) return "missing";
+      return (await instanceProfileHasRole(iam, profile(ctx), role(ctx))) ? "exists" : "missing";
+    },
+
+    async create(ctx) {
+      const { iam } = awsClients(ctx);
+      const profileName = profile(ctx);
+      const roleName = role(ctx);
+
+      let arn = await instanceProfileArn(iam, profileName);
+      let createdProfile = false;
+      if (!arn) {
+        const made = await iam.send(
+          new CreateInstanceProfileCommand({
+            InstanceProfileName: profileName,
+            Path: opts.path?.(ctx.params),
+          }),
+        );
+        arn = made.InstanceProfile?.Arn;
+        createdProfile = true;
+        ctx.log.success(`Created instance profile ${profileName}`);
+      }
+
+      if (!(await instanceProfileHasRole(iam, profileName, roleName))) {
+        await iam.send(
+          new AddRoleToInstanceProfileCommand({
+            InstanceProfileName: profileName,
+            RoleName: roleName,
+          }),
+        );
+        ctx.log.success(`Attached role ${roleName} to instance profile ${profileName}`);
+      }
+
+      return {
+        instanceProfileArn: arn ?? "",
+        instanceProfileName: profileName,
+        instanceProfileCreatedThisRun: createdProfile,
+      };
+    },
+
+    async rollback(ctx) {
+      const { iam } = awsClients(ctx);
+      const profileName = profile(ctx);
+
+      // Detach first: AWS refuses to delete a profile that still holds a role.
+      try {
+        await iam.send(
+          new RemoveRoleFromInstanceProfileCommand({
+            InstanceProfileName: profileName,
+            RoleName: role(ctx),
+          }),
+        );
+      } catch (err) {
+        if (!isNoSuchEntity(err)) throw err;
+      }
+
+      // Only delete a profile this run actually created -- one that already
+      // existed may be attached to instances this run knows nothing about.
+      if (ctx.outputs.instanceProfileCreatedThisRun !== true) return;
+      try {
+        await iam.send(new DeleteInstanceProfileCommand({ InstanceProfileName: profileName }));
+      } catch (err) {
+        if (!isNoSuchEntity(err)) throw err;
+      }
+    },
+
+    resource(ctx) {
+      return {
+        type: "aws_iam_instance_profile",
+        name: profile(ctx),
+        attributes: {
+          arn: (ctx.outputs.instanceProfileArn as string) ?? "",
+          role: role(ctx),
+        },
+      };
+    },
+
+    handoff: {
+      terraform: {
+        type: "aws_iam_instance_profile",
+        address: "aws_iam_instance_profile.this",
+        importId: (ctx) => opts.profileName(ctx.params),
+      },
     },
   };
 }
