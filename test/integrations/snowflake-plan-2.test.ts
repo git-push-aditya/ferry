@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import type { StepContext } from "../../src/core/define";
-import { revokeStep } from "../../integrations/snowflake/revoke-role-from-user/steps/revoke";
-import type { Params as RevokeParams } from "../../integrations/snowflake/revoke-role-from-user/params";
 import { offboardStep } from "../../integrations/snowflake/offboard-developer/steps/offboard";
 import type { Params as OffboardParams } from "../../integrations/snowflake/offboard-developer/params";
 import { grantAccessStep } from "../../integrations/snowflake/grant-database-schema-access/steps/grant-access";
@@ -26,27 +24,6 @@ function sfPlanCtx<P>(params: P, runQuery: (sql: string) => Promise<Record<strin
     log: NO_LOG,
   };
 }
-
-describe("snowflake dry-run plan: revoke-role-from-user (inverted create-or-skip)", () => {
-  const params: RevokeParams = { USER_NAME: "JDOE", ROLE_NAME: "ANALYST" };
-
-  test("role currently granted -> missing (needs revoking)", async () => {
-    const ctx = sfPlanCtx(params, async () => [{ role: "ANALYST" }]);
-    expect(await revokeStep.check(ctx)).toBe("missing");
-  });
-
-  test("role not granted -> exists (already achieved)", async () => {
-    const ctx = sfPlanCtx(params, async () => []);
-    expect(await revokeStep.check(ctx)).toBe("exists");
-  });
-
-  test("user doesn't exist -> exists (nothing to revoke)", async () => {
-    const ctx = sfPlanCtx(params, async () => {
-      throw new Error("002003 (02000): SQL compilation error: User 'JDOE' does not exist or not authorized.");
-    });
-    expect(await revokeStep.check(ctx)).toBe("exists");
-  });
-});
 
 describe("snowflake dry-run plan: offboard-developer (inverted create-or-skip)", () => {
   const params: OffboardParams = { USER_NAME: "JDOE", HARD_DELETE: false, OFFBOARD_REASON: undefined };

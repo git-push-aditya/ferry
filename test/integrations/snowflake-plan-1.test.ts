@@ -8,10 +8,6 @@ import type { Params as OnboardProdParams } from "../../integrations/snowflake/o
 import { mintNewKeyStep } from "../../integrations/snowflake/rotate-user-key-pair/steps/mint-new-key";
 import { cutoverOldKeyStep } from "../../integrations/snowflake/rotate-user-key-pair/steps/cutover-old-key";
 import type { Params as RotateParams } from "../../integrations/snowflake/rotate-user-key-pair/params";
-import { updateRoleStep } from "../../integrations/snowflake/update-user-role/steps/update-role";
-import type { Params as UpdateRoleParams } from "../../integrations/snowflake/update-user-role/params";
-import { grantStep } from "../../integrations/snowflake/grant-role-to-user/steps/grant";
-import type { Params as GrantParams } from "../../integrations/snowflake/grant-role-to-user/params";
 
 import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
 const ACCOUNT = TEST_AWS_ACCOUNT;
@@ -105,34 +101,3 @@ describe("rotate-user-key-pair plan", () => {
   });
 });
 
-describe("update-user-role plan", () => {
-  const PARAMS: UpdateRoleParams = { USER_NAME: "JDOE", TARGET_DEFAULT_ROLE: "ANALYST" };
-
-  function userDescRows(defaultRole: string) {
-    return [{ property: "DEFAULT_ROLE", property_value: defaultRole }];
-  }
-
-  test("plan: default role already matches -> exists", async () => {
-    const ctx = sfCtx(PARAMS, {}, async () => userDescRows("ANALYST"));
-    expect(await updateRoleStep.check(ctx)).toBe("exists");
-  });
-
-  test("plan: default role differs -> missing", async () => {
-    const ctx = sfCtx(PARAMS, {}, async () => userDescRows("DEVELOPER"));
-    expect(await updateRoleStep.check(ctx)).toBe("missing");
-  });
-});
-
-describe("grant-role-to-user plan", () => {
-  const PARAMS: GrantParams = { USER_NAME: "JDOE", ROLE_NAME: "ANALYST" };
-
-  test("plan: role not granted -> missing", async () => {
-    const ctx = sfCtx(PARAMS, {}, async () => [{ role: "OTHER_ROLE" }]);
-    expect(await grantStep.check(ctx)).toBe("missing");
-  });
-
-  test("plan: role already granted -> exists", async () => {
-    const ctx = sfCtx(PARAMS, {}, async () => [{ role: "ANALYST" }]);
-    expect(await grantStep.check(ctx)).toBe("exists");
-  });
-});

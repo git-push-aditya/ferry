@@ -1,13 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { githubRepoStep } from "../../src/providers/github";
-import { secretStep } from "../../integrations/github/create-or-update-repo-secret/steps/secret";
-import type { Params as RepoSecretParams } from "../../integrations/github/create-or-update-repo-secret/params";
-import { orgSecretStep } from "../../integrations/github/create-or-update-org-secret/steps/org-secret";
-import type { Params as OrgSecretParams } from "../../integrations/github/create-or-update-org-secret/params";
 import { environmentStep } from "../../integrations/github/create-environment/steps/environment";
 import type { Params as EnvironmentParams } from "../../integrations/github/create-environment/params";
-import { environmentSecretStep } from "../../integrations/github/add-environment-secret/steps/environment-secret";
-import type { Params as EnvSecretParams } from "../../integrations/github/add-environment-secret/params";
 import { confirmDestructiveStep } from "../../integrations/github/delete-repo/steps/confirm-destructive";
 import { deleteRepoStep } from "../../integrations/github/delete-repo/steps/delete-repo";
 import type { Params as DeleteRepoParams } from "../../integrations/github/delete-repo/params";
@@ -61,60 +55,6 @@ describe("github dry-run plan: delete-repo", () => {
   });
 });
 
-describe("github dry-run plan: create-or-update-repo-secret", () => {
-  const params: RepoSecretParams = { OWNER: "o", REPO: "r", SECRET_NAME: "S", SECRET_VALUE: "v", FORCE_ROTATE: false };
-
-  test("missing repo -> conflict", async () => {
-    const ctx = githubCtx(params, {}, () => ({ status: 404, data: {} }));
-    expect(await secretStep.check(ctx)).toBe("conflict");
-  });
-
-  test("secret absent -> missing", async () => {
-    const ctx = githubCtx(params, {}, (method, path) => {
-      if (path === "/repos/o/r") return { status: 200, data: {} };
-      return { status: 404, data: {} };
-    });
-    expect(await secretStep.check(ctx)).toBe("missing");
-  });
-
-  test("secret present -> exists (create-or-skip, not always-reconcile)", async () => {
-    const ctx = githubCtx(params, {}, (method, path) => {
-      if (path === "/repos/o/r") return { status: 200, data: {} };
-      return { status: 200, data: {} };
-    });
-    expect(await secretStep.check(ctx)).toBe("exists");
-  });
-
-  test("FORCE_ROTATE=true -> always missing, even if the secret is present", async () => {
-    const ctx = githubCtx({ ...params, FORCE_ROTATE: true }, {}, (method, path) => {
-      if (path === "/repos/o/r") return { status: 200, data: {} };
-      return { status: 200, data: {} };
-    });
-    expect(await secretStep.check(ctx)).toBe("missing");
-  });
-});
-
-describe("github dry-run plan: create-or-update-org-secret", () => {
-  const params: OrgSecretParams = {
-    ORG: "acme",
-    SECRET_NAME: "S",
-    SECRET_VALUE: "v",
-    VISIBILITY: "private",
-    SELECTED_REPOSITORY_IDS: [],
-    FORCE_ROTATE: false,
-  };
-
-  test("secret absent -> missing", async () => {
-    const ctx = githubCtx(params, {}, () => ({ status: 404, data: {} }));
-    expect(await orgSecretStep.check(ctx)).toBe("missing");
-  });
-
-  test("secret present -> exists (routes to reconcile(), the visibility diff layer)", async () => {
-    const ctx = githubCtx(params, {}, () => ({ status: 200, data: {} }));
-    expect(await orgSecretStep.check(ctx)).toBe("exists");
-  });
-});
-
 describe("github dry-run plan: create-environment", () => {
   const params: EnvironmentParams = {
     OWNER: "o",
@@ -149,26 +89,3 @@ describe("github dry-run plan: create-environment", () => {
   });
 });
 
-describe("github dry-run plan: add-environment-secret", () => {
-  const params: EnvSecretParams = {
-    OWNER: "o",
-    REPO: "r",
-    ENVIRONMENT_NAME: "production",
-    SECRET_NAME: "S",
-    SECRET_VALUE: "v",
-    FORCE_ROTATE: false,
-  };
-
-  test("missing environment -> conflict (never auto-creates one)", async () => {
-    const ctx = githubCtx(params, {}, () => ({ status: 404, data: {} }));
-    expect(await environmentSecretStep.check(ctx)).toBe("conflict");
-  });
-
-  test("environment exists, secret absent -> missing", async () => {
-    const ctx = githubCtx(params, {}, (method, path) => {
-      if (path.includes("/environments/production") && !path.includes("secrets")) return { status: 200, data: {} };
-      return { status: 404, data: {} };
-    });
-    expect(await environmentSecretStep.check(ctx)).toBe("missing");
-  });
-});

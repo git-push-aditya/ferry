@@ -138,3 +138,53 @@ export function loadEnvLayers<C, P>(input: EnvLayerInput<C, P>): EnvLayers<C, P>
 
   return { creds: credResult.data, params: paramResult.data };
 }
+
+/**
+ * `.env` carries strings, so a boolean param arrives as "true"/"false" and a
+ * list arrives as a JSON string. Both helpers live here rather than beside a
+ * provider because neither knows anything about any provider -- they are the
+ * shape of the `.env` layer itself.
+ *
+ * Note the consequence for integrations that use them: the schema's Input type
+ * stops matching its Output type, which `z.ZodType<P>` cannot model, so those
+ * integrations cast their schema in `integration.ts`.
+ */
+export function boolFlag(defaultValue: "true" | "false") {
+  return z
+    .enum(["true", "false"])
+    .default(defaultValue)
+    .transform((v) => v === "true");
+}
+
+export function jsonArrayParam<T>(label: string, itemSchema: z.ZodType<T>, defaultValue = "[]") {
+  return z
+    .string()
+    .optional()
+    .default(defaultValue)
+    .transform((v, ctx) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(v);
+      } catch {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} must be valid JSON` });
+        return z.NEVER;
+      }
+      if (!Array.isArray(parsed)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} must be a JSON array` });
+        return z.NEVER;
+      }
+      const items: T[] = [];
+      parsed.forEach((entry, index) => {
+        const result = itemSchema.safeParse(entry);
+        if (!result.success) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `${label}[${index}] is invalid: ${result.error.issues.map((i) => i.message).join(", ")}`,
+          });
+          return;
+        }
+        items.push(result.data);
+      });
+      return items;
+    });
+}

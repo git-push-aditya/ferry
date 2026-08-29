@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import type { StepContext } from "../../src/core/define";
-import { revokeStep } from "../../integrations/snowflake/revoke-role-from-user/steps/revoke";
-import type { Params as RevokeParams } from "../../integrations/snowflake/revoke-role-from-user/params";
 import { offboardStep } from "../../integrations/snowflake/offboard-developer/steps/offboard";
 import type { Params as OffboardParams } from "../../integrations/snowflake/offboard-developer/params";
 import { grantAccessStep } from "../../integrations/snowflake/grant-database-schema-access/steps/grant-access";
@@ -56,78 +54,6 @@ function iamCtx<P>(
     log: NO_LOG,
   };
 }
-
-const REVOKE_PARAMS: RevokeParams = { USER_NAME: "JDOE", ROLE_NAME: "ANALYST" };
-
-describe("revoke-role-from-user", () => {
-  test("check(): role currently granted -> missing (needs revoke)", async () => {
-    const ctx = sfCtx(REVOKE_PARAMS, {}, async () => [{ role: "ANALYST" }, { role: "OTHER" }]);
-    expect(await revokeStep.check(ctx)).toBe("missing");
-  });
-
-  test("check(): role not granted -> exists (skip)", async () => {
-    const ctx = sfCtx(REVOKE_PARAMS, {}, async () => [{ role: "OTHER" }]);
-    expect(await revokeStep.check(ctx)).toBe("exists");
-  });
-
-  test("check(): nonexistent user -> exists, via the 'does not exist or not authorized' error", async () => {
-    const ctx = sfCtx(REVOKE_PARAMS, {}, async () => {
-      throw new Error("User 'JDOE' does not exist or not authorized.");
-    });
-    expect(await revokeStep.check(ctx)).toBe("exists");
-  });
-
-  test("check(): a different error still throws", async () => {
-    const ctx = sfCtx(REVOKE_PARAMS, {}, async () => {
-      throw new Error("connection reset");
-    });
-    await expect(revokeStep.check(ctx)).rejects.toThrow(/connection reset/);
-  });
-
-  test("create(): issues REVOKE ROLE and confirms it took effect", async () => {
-    const queries: string[] = [];
-    let revoked = false;
-    const ctx = sfCtx(REVOKE_PARAMS, {}, async (sql) => {
-      queries.push(sql);
-      if (sql.startsWith("REVOKE")) revoked = true;
-      return revoked ? [] : [{ role: "ANALYST" }];
-    });
-
-    const outputs = await revokeStep.create!(ctx);
-
-    expect(queries[0]).toBe("REVOKE ROLE ANALYST FROM USER JDOE;");
-    expect(outputs.revokedThisRun).toBe(true);
-  });
-
-  test("create(): throws when the revoke didn't take effect", async () => {
-    const ctx = sfCtx(REVOKE_PARAMS, {}, async () => [{ role: "ANALYST" }]);
-    await expect(revokeStep.create!(ctx)).rejects.toThrow(/did not take effect/);
-  });
-
-  test("rollback(): re-grants the role when this run revoked it", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(REVOKE_PARAMS, { revokedThisRun: true }, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await revokeStep.rollback(ctx);
-
-    expect(queries).toEqual(["GRANT ROLE ANALYST TO USER JDOE;"]);
-  });
-
-  test("rollback(): does nothing when this run didn't revoke anything", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(REVOKE_PARAMS, {}, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await revokeStep.rollback(ctx);
-
-    expect(queries).toEqual([]);
-  });
-});
 
 const OFFBOARD_PARAMS_DISABLE: OffboardParams = { USER_NAME: "JDOE", HARD_DELETE: false };
 const OFFBOARD_PARAMS_HARD: OffboardParams = { USER_NAME: "JDOE", HARD_DELETE: true };

@@ -2,9 +2,9 @@
 
 A repeatable, non-destructive one-way sync from a source bucket to a
 destination bucket that both already exist. Unlike
-`aws/s3/delete-bucket-with-transfer`, the source is never touched and nothing
-is ever deleted from the destination — this is meant to be run again and
-again.
+`aws/s3/decommission-bucket` with `DRAIN_MODE=transfer`, the source is never
+touched and nothing is ever deleted from the destination — this is meant to be
+run again and again.
 
 ```bash
 bun run bin/ferry.ts aws/s3/sync-bucket-contents --dry-run
