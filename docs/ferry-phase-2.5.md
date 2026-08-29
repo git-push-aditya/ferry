@@ -45,8 +45,9 @@ cut line for §2.
 
 ---
 
-## 1. Prove the spine (do this first — it gates everything)
+## 1. Prove the spine (runs against the *pruned* catalogue)
 
+Run this **after** §2, so every run is against an integration that is staying.
 `docs/handover.md` §6 has been outstanding since the end of Phase 1 and is now 80
 integrations stale. **No integration in this repo has ever run against real infrastructure.**
 `output/` contains exactly two reports, both dated 2026-07-27, both from the pre-framework
@@ -208,9 +209,19 @@ the last three, but they are genuinely arguable and I would rather flag than dec
 | `snowflake/audit-user-access` | Same read-only shape. | Same lifecycle value; pairs with offboarding. |
 | `aws/iam/role/create-service-linked-role` | One call. | Genuinely obscure and easy to get wrong. |
 
-**Recommendation:** cut `create-repo` and `launch-instance` only *after* §3 resolves; keep
-the two audits but reclassify them in their READMEs as **reports**, and say plainly that
-they create nothing and roll back nothing so nobody expects otherwise.
+**Resolved 2026-08-29 — cut exactly three, keep four:**
+
+| Verdict | Integration | Reason |
+| --- | --- | --- |
+| **Cut** | `github/create-repo` | `gh repo create`. `githubRepoStep` survives in `src/providers/`. |
+| **Cut** | `aws/ec2/launch-instance` | §3 has to extend `launchStep` regardless; the step lives in `src/providers/` after that, which is where it belongs. |
+| **Cut** | `aws/iam/role/create-service-linked-role` | One call. Obscure is not the same as tedious. |
+| Keep | `aws/iam/role/create-role` | Most-cited in the repo, and the only runnable exercise of `iamRoleStep`. |
+| Keep | `aws/iam/user/create-user` | Same, for `iamUserStep`; it is the head of the user-lifecycle chain. |
+| Keep | `aws/iam/role/audit-unused-roles` | Reclassify the README as a **report**: creates nothing, rolls back nothing. |
+| Keep | `snowflake/audit-user-access` | Same reclassification; pairs directly with offboarding. |
+
+That lands the catalogue on exactly **42**.
 
 ### 2.5 What is left
 
@@ -219,8 +230,8 @@ they create nothing and roll back nothing so nobody expects otherwise.
 | Today | 82 |
 | After Tier 1 | 50 |
 | After Tier 2 | 45 |
-| After Tier 3 (as recommended) | ~42 |
-| Plus §3's runner registration | ~43 |
+| After Tier 3 (three cuts, resolved above) | **42** |
+| Plus §3's runner registration | 43 |
 
 Of those, the **flagship twelve** — the ones that get live runs, READMEs written for
 someone arriving from a search engine, and the front of the README:
@@ -339,17 +350,28 @@ Small, assigned to Phase 2, not done. Do them in one commit.
 ## Order of work, and why
 
 ```
-§1 prove the spine        <- gates everything; without it nothing else is trustworthy
-§5 housekeeping           <- cheap, do it while waiting on scratch-account access
-§2 cut the tail           <- shrinks the surface before you invest in it
-§3 runner registration    <- the one missing integration, needs §2's launchStep decision
+§5 housekeeping           <- cheap; unblocks nothing but costs nothing
+§2 cut the tail           <- 82 -> 42; everything downstream gets half the surface
+§3 runner registration    <- the one missing integration; needs §2's launchStep decision
+§1 prove the spine        <- live-run the survivors, not the catalogue
 §4 backfill handoff       <- needs §1's real identifiers and §2's smaller surface
    -> Phase 3
 ```
 
-The single most important sequencing claim: **§4 must come after §1 and §2.** Building the
-handoff metadata against 82 integrations, from a desk, with placeholder Terraform addresses,
-is doing Phase 3's prerequisite twice.
+**Amended 2026-08-29: the cut comes before the live runs.** The original draft put proving
+first on the reasoning that it gates trust in everything else. That is wrong in one specific
+way: the prune is *pure deletion* against a catalogue with **zero code-level coupling**
+between integrations, so nothing about cutting can be invalidated by what a live run
+teaches. Proving first would mean live-testing, and eventually backfilling handoff metadata
+for, integrations already marked for deletion.
+
+The number that matters: after §2 the standing test obligation for this repository is
+**42 integrations, not 82** — and 43 once §3's runner registration lands. Every future phase
+pays that smaller bill.
+
+The one sequencing claim that survives unchanged: **§4 must come after both §1 and §2.**
+Building the handoff metadata against 82 integrations, from a desk, with placeholder
+Terraform addresses, is doing Phase 3's prerequisite twice.
 
 ## Done when
 
