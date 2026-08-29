@@ -7,6 +7,14 @@ and for each role, every privilege/object it directly holds
 account-level flags (`DISABLED`, `DEFAULT_ROLE`, whether an RSA key is
 registered).
 
+> **This is a report, not a provisioning integration.** It makes no
+> mutations, registers no `resource()`, and has nothing to roll back. It is
+> kept in the catalogue because it serves the developer-lifecycle story —
+> access review pairs directly with offboarding — but it does not have
+> Ferry's usual shape, and the engine's rollback and verification guarantees
+> mean something weaker here: `verify()` asserts the report was produced and
+> is well-formed, because there is no live mutation to prove instead.
+
 ```bash
 bun run bin/ferry.ts snowflake/audit-user-access --dry-run
 bun run bin/ferry.ts snowflake/audit-user-access

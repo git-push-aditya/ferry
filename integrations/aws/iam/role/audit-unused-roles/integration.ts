@@ -15,7 +15,7 @@ export default defineIntegration<Params>({
   id: "aws/iam/role/audit-unused-roles",
   schemaVersion: 1,
   summary:
-    "Read-only audit of IAM roles for unused/stale candidates, using RoleLastUsed by default and an optional deeper Access Advisor pass.",
+    "Report (no mutations): audits IAM roles for unused/stale candidates, using RoleLastUsed by default and an optional deeper Access Advisor pass.",
 
   // Numeric/boolean toggles arrive from .env as strings and are coerced here,
   // the same ZodEffects shape create-bucket's boolean flags hit.

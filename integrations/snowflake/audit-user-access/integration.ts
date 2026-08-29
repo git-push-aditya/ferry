@@ -27,7 +27,7 @@ export default defineIntegration<Params>({
   id: "snowflake/audit-user-access",
   schemaVersion: 1,
   summary:
-    "Read-only audit of a Snowflake user's granted roles and every role's effective privileges, for whichever account the root .env points at.",
+    "Report (no mutations): audits a Snowflake user's granted roles and every role's effective privileges, for whichever account the root .env points at.",
 
   params: paramsSchema,
   credentials: ["snowflake"],

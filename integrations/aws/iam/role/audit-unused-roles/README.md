@@ -5,9 +5,13 @@ used, a stale candidate, or active, using `RoleLastUsed` — free with every
 `ListRoles` call — as the default signal, with an optional deeper
 Access Advisor pass for candidates only.
 
-**This integration makes no AWS mutations.** There is nothing to roll back —
-`rollback()` is a no-op and no `resource()` is ever registered. The whole
-point of this integration is the report `report()` produces.
+> **This is a report, not a provisioning integration.** It makes no
+> mutations, registers no `resource()`, and has nothing to roll back. It is
+> kept in the catalogue because it serves the developer-lifecycle story —
+> access review pairs directly with offboarding — but it does not have
+> Ferry's usual shape, and the engine's rollback and verification guarantees
+> mean something weaker here: `verify()` asserts the report was produced and
+> is well-formed, because there is no live mutation to prove instead.
 
 ```bash
 bun run bin/ferry.ts aws/iam/role/audit-unused-roles --dry-run
