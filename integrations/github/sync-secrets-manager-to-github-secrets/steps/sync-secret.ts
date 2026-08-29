@@ -40,7 +40,7 @@ export const syncSecretStep: Step<Params> = {
     const p = ctx.params;
 
     if ((await rest.raw("GET", `/repos/${p.OWNER}/${p.REPO}`)).status === 404) {
-      ctx.log.warn(`Repo "${p.OWNER}/${p.REPO}" does not exist — run github/create-repo first.`);
+      ctx.log.warn(`Repo "${p.OWNER}/${p.REPO}" does not exist — create it first (gh repo create).`);
       return "conflict";
     }
     if (p.TARGET_SCOPE === "environment") {

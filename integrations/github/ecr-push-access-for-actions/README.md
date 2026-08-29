@@ -51,4 +51,4 @@ integration.
 **Rollback deletes the repository only with `ALLOW_DESTRUCTIVE_ROLLBACK=
 true`.** A repository can hold real images pushed by CI runs between
 creation and rollback — deleting it is real data loss, not a clean undo,
-same gate class as `github/create-repo`'s destructive rollback.
+same gate class as `github/delete-repo`'s destructive rollback.

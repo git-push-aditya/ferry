@@ -47,7 +47,7 @@ export function githubRepoExistsGuardStep<P>(
       if (state === "missing") {
         ctx.log.warn(
           `Repo "${owner}/${repo}" does not exist. This integration operates on an existing repo ` +
-            `and does not create one — run github/create-repo first if you need it provisioned.`,
+            `and does not create one — create it first (gh repo create) if you need it.`,
         );
         return "conflict";
       }

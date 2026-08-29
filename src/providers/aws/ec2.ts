@@ -1,16 +1,21 @@
+import { randomUUID } from "node:crypto";
 import {
   CreateTagsCommand,
   DeleteTagsCommand,
   DescribeInstancesCommand,
   DescribeTagsCommand,
+  RunInstancesCommand,
   StartInstancesCommand,
   StopInstancesCommand,
+  TerminateInstancesCommand,
   type Instance,
   type EC2Client,
   type Tag,
 } from "@aws-sdk/client-ec2";
+import type { Step } from "../../core/define";
 import { pollUntil } from "../../core/wait";
 import type { Logger } from "../../core/logger";
+import { awsClients } from "./clients";
 
 function isInstanceNotFound(err: unknown): boolean {
   return (err as { name?: string })?.name === "InvalidInstanceID.NotFound";
@@ -138,4 +143,160 @@ export function ferryIdentityTags(integrationId: string, logicalName: string): T
     { Key: "ferry:integration-id", Value: integrationId },
     { Key: "ferry:logical-name", Value: logicalName },
   ];
+}
+
+export interface Ec2LaunchOptions<P> {
+  /**
+   * Used as the `ferry:logical-name` identity tag. EC2 has no natural
+   * global-uniqueness probe the way S3 bucket names do, so identity here is a
+   * tag pair, not a name.
+   */
+  logicalName(params: P): string;
+  /**
+   * The `ferry:integration-id` tag value. Passed in rather than hardcoded so
+   * two integrations that both launch instances do not collide on check().
+   */
+  integrationId: string;
+
+  amiId(params: P): string;
+  instanceType(params: P): string;
+  subnetId(params: P): string;
+  securityGroupIds(params: P): string[];
+  keyPairName?(params: P): string | undefined;
+  tags?(params: P): Record<string, string>;
+  /**
+   * Accepted as an override so a re-run after a partial failure (RunInstances
+   * succeeded, the poll did not) can reuse the same token rather than
+   * generating a fresh one that would launch a second instance.
+   */
+  clientTokenOverride?(params: P): string | undefined;
+
+  id?: string;
+  title?: string;
+}
+
+/**
+ * Launch one EC2 instance, identified by a ferry tag pair rather than a name.
+ *
+ * Promoted out of the former `aws/ec2/launch-instance` integration when that
+ * folder was cut: launching an instance is a step other integrations compose
+ * with (a self-hosted runner needs an instance, an instance profile and a
+ * registration in one ordered run), not a procedure anyone needs on its own —
+ * `aws ec2 run-instances` already covers that case.
+ *
+ * Per the Step contract, `check()` is a shallow presence probe, not drift
+ * detection: a param mismatch (different AMI, type, subnet) on an existing
+ * tagged instance is still `exists`, never `conflict`.
+ */
+export function ec2LaunchStep<P>(opts: Ec2LaunchOptions<P>): Step<P> {
+  const TERMINAL_STATES = new Set(["terminated", "shutting-down"]);
+  return {
+    id: opts.id ?? "launch-instance",
+    title: opts.title ?? "Launch the EC2 instance",
+
+    async check(ctx) {
+      const { ec2 } = awsClients(ctx);
+      const described = await ec2.send(
+        new DescribeInstancesCommand({
+          Filters: [
+            { Name: "tag:ferry:integration-id", Values: [opts.integrationId] },
+            { Name: "tag:ferry:logical-name", Values: [opts.logicalName(ctx.params)] },
+          ],
+        }),
+      );
+
+      for (const reservation of described.Reservations ?? []) {
+        for (const instance of reservation.Instances ?? []) {
+          const stateName = instance.State?.Name;
+          if (stateName && !TERMINAL_STATES.has(stateName)) return "exists";
+        }
+      }
+      return "missing";
+    },
+
+    async create(ctx) {
+      const { ec2 } = awsClients(ctx);
+      const clientToken = opts.clientTokenOverride?.(ctx.params) ?? randomUUID();
+
+      const run = await ec2.send(
+        new RunInstancesCommand({
+          ImageId: opts.amiId(ctx.params),
+          InstanceType: opts.instanceType(ctx.params) as never,
+          MinCount: 1,
+          MaxCount: 1,
+          SubnetId: opts.subnetId(ctx.params),
+          SecurityGroupIds: opts.securityGroupIds(ctx.params),
+          KeyName: opts.keyPairName?.(ctx.params),
+          ClientToken: clientToken,
+          TagSpecifications: [
+            {
+              ResourceType: "instance",
+              Tags: [
+                ...ferryIdentityTags(opts.integrationId, opts.logicalName(ctx.params)),
+                ...Object.entries(opts.tags?.(ctx.params) ?? {}).map(([Key, Value]) => ({ Key, Value })),
+              ],
+            },
+          ],
+        }),
+      );
+
+      const instance = run.Instances?.[0];
+      const instanceId = instance?.InstanceId;
+      if (!instanceId) throw new Error("RunInstances did not return an instance id");
+
+      ctx.log.info(`Launched ${instanceId}, waiting for it to reach "running"...`);
+      await pollInstanceState(ec2, instanceId, "running", { timeoutMs: 10 * 60_000 });
+
+      const described = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+      const settled = described.Reservations?.[0]?.Instances?.[0];
+
+      ctx.log.success(`Instance ${instanceId} is running`);
+
+      return {
+        instanceId,
+        privateIp: settled?.PrivateIpAddress ?? instance.PrivateIpAddress ?? "",
+        availabilityZone:
+          settled?.Placement?.AvailabilityZone ?? instance.Placement?.AvailabilityZone ?? "",
+        clientToken,
+      };
+    },
+
+    async rollback(ctx) {
+      const instanceId = ctx.outputs.instanceId as string | undefined;
+      if (!instanceId) return;
+
+      const { ec2 } = awsClients(ctx);
+      try {
+        await ec2.send(new TerminateInstancesCommand({ InstanceIds: [instanceId] }));
+        await pollInstanceState(ec2, instanceId, "terminated", { timeoutMs: 5 * 60_000 });
+        ctx.log.warn(`Rolled back — terminated ${instanceId}`);
+      } catch (err) {
+        if (isInstanceNotFound(err)) {
+          ctx.log.warn(`${instanceId} was already gone during rollback`);
+          return;
+        }
+        throw err;
+      }
+    },
+
+    resource(ctx) {
+      return {
+        type: "aws_ec2_instance",
+        name: opts.logicalName(ctx.params),
+        attributes: {
+          instanceId: (ctx.outputs.instanceId as string) ?? "",
+          availabilityZone: (ctx.outputs.availabilityZone as string) ?? "",
+          privateIp: (ctx.outputs.privateIp as string) ?? "",
+        },
+      };
+    },
+
+    handoff: {
+      terraform: {
+        type: "aws_instance",
+        address: "aws_instance.this",
+        importId: (ctx) => (ctx.outputs.instanceId as string) ?? "",
+      },
+    },
+  };
 }

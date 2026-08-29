@@ -18,56 +18,6 @@ beforeAll(async () => {
 // create-repo (githubRepoStep)
 // ---------------------------------------------------------------------------
 
-describe("create-repo (githubRepoStep)", () => {
-  function makeStep(allowDestructiveRollback = false) {
-    return githubRepoStep<{ OWNER: string; REPO: string; OWNER_TYPE: "user" | "org" }>({
-      owner: (p) => p.OWNER,
-      repo: (p) => p.REPO,
-      ownerType: (p) => p.OWNER_TYPE,
-      autoInit: () => true,
-      allowDestructiveRollback: () => allowDestructiveRollback,
-    });
-  }
-
-  test("create() posts to /user/repos for a personal account", async () => {
-    const calls: Call[] = [];
-    const ctx = githubCtx(
-      { OWNER: "o", REPO: "r", OWNER_TYPE: "user" as const },
-      {},
-      () => ({ status: 201, data: { html_url: "https://github.com/o/r" } }),
-      calls,
-    );
-    const outputs = await makeStep().create!(ctx);
-    expect(calls[0]).toMatchObject({ method: "POST", path: "/user/repos" });
-    expect((calls[0]!.body as { name: string }).name).toBe("r");
-    expect(outputs).toEqual({ githubRepoCreatedThisRun: true, githubRepoHtmlUrl: "https://github.com/o/r" });
-  });
-
-  test("create() posts to /orgs/{owner}/repos for an org account", async () => {
-    const calls: Call[] = [];
-    const ctx = githubCtx({ OWNER: "acme", REPO: "r", OWNER_TYPE: "org" as const }, {}, () => ({
-      status: 201,
-      data: { html_url: "https://github.com/acme/r" },
-    }), calls);
-    await makeStep().create!(ctx);
-    expect(calls[0]!.path).toBe("/orgs/acme/repos");
-  });
-
-  test("rollback does NOT delete without ALLOW_DESTRUCTIVE_ROLLBACK", async () => {
-    const calls: Call[] = [];
-    const ctx = githubCtx({ OWNER: "o", REPO: "r", OWNER_TYPE: "user" as const }, {}, () => ({ status: 204, data: {} }), calls);
-    await makeStep(false).rollback(ctx);
-    expect(calls).toHaveLength(0);
-  });
-
-  test("rollback deletes when ALLOW_DESTRUCTIVE_ROLLBACK=true", async () => {
-    const calls: Call[] = [];
-    const ctx = githubCtx({ OWNER: "o", REPO: "r", OWNER_TYPE: "user" as const }, {}, () => ({ status: 204, data: {} }), calls);
-    await makeStep(true).rollback(ctx);
-    expect(calls).toEqual([{ method: "DELETE", path: "/repos/o/r", body: undefined }]);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // delete-repo
 // ---------------------------------------------------------------------------

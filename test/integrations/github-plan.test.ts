@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { githubRepoStep } from "../../src/providers/github";
 import { environmentStep } from "../../integrations/github/create-environment/steps/environment";
 import type { Params as EnvironmentParams } from "../../integrations/github/create-environment/params";
 import { confirmDestructiveStep } from "../../integrations/github/delete-repo/steps/confirm-destructive";
@@ -9,27 +8,6 @@ import { githubCtx } from "../helpers/github-fake-client";
 
 const REPO_OK = (status = 200) => (method: string, path: string) =>
   path === "/repos/o/r" ? { status, data: {} } : { status: 404, data: {} };
-
-describe("github dry-run plan: create-repo (githubRepoStep)", () => {
-  const step = githubRepoStep<{ OWNER: string; REPO: string; OWNER_TYPE: "user" | "org"; ALLOW_DESTRUCTIVE_ROLLBACK: boolean }>({
-    owner: (p) => p.OWNER,
-    repo: (p) => p.REPO,
-    ownerType: (p) => p.OWNER_TYPE,
-    autoInit: () => true,
-    allowDestructiveRollback: (p) => p.ALLOW_DESTRUCTIVE_ROLLBACK,
-  });
-  const params = { OWNER: "o", REPO: "r", OWNER_TYPE: "user" as const, ALLOW_DESTRUCTIVE_ROLLBACK: false };
-
-  test("repo missing -> missing", async () => {
-    const ctx = githubCtx(params, {}, () => ({ status: 404, data: {} }));
-    expect(await step.check(ctx)).toBe("missing");
-  });
-
-  test("repo already exists -> exists", async () => {
-    const ctx = githubCtx(params, {}, () => ({ status: 200, data: {} }));
-    expect(await step.check(ctx)).toBe("exists");
-  });
-});
 
 describe("github dry-run plan: delete-repo", () => {
   const params: DeleteRepoParams = { OWNER: "o", REPO: "r", ALLOW_DESTRUCTIVE_TEARDOWN: false };

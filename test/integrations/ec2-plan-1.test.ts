@@ -1,13 +1,41 @@
 import { describe, expect, test } from "bun:test";
 import type { StepContext } from "../../src/core/define";
-import { launchStep } from "../../integrations/aws/ec2/launch-instance/steps/launch";
-import type { Params as LaunchParams } from "../../integrations/aws/ec2/launch-instance/params";
+import { ec2LaunchStep } from "../../src/providers/aws";
 import { groupStep } from "../../integrations/aws/ec2/create-security-group/steps/group";
 import type { Params as GroupParams } from "../../integrations/aws/ec2/create-security-group/params";
 import { reconcileRulesStep } from "../../integrations/aws/ec2/update-security-group-rules/steps/reconcile-rules";
 import type { Params as RulesParams } from "../../integrations/aws/ec2/update-security-group-rules/params";
 
 import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
+
+type LaunchParams = {
+  LOGICAL_NAME: string;
+  AMI_ID: string;
+  INSTANCE_TYPE: string;
+  SUBNET_ID: string;
+  SECURITY_GROUP_IDS: string[];
+  KEY_PAIR_NAME: string | undefined;
+  CLIENT_TOKEN_OVERRIDE: string | undefined;
+  TAGS: Record<string, string>;
+};
+
+/**
+ * The former aws/ec2/launch-instance integration's step, now the shared
+ * `ec2LaunchStep` factory. Wired here with the same accessors that
+ * integration used, so this file keeps proving the same behavior.
+ */
+const launchStep = ec2LaunchStep<LaunchParams>({
+  integrationId: "aws/ec2/launch-instance",
+  logicalName: (p) => p.LOGICAL_NAME,
+  amiId: (p) => p.AMI_ID,
+  instanceType: (p) => p.INSTANCE_TYPE,
+  subnetId: (p) => p.SUBNET_ID,
+  securityGroupIds: (p) => p.SECURITY_GROUP_IDS,
+  keyPairName: (p) => p.KEY_PAIR_NAME,
+  clientTokenOverride: (p) => p.CLIENT_TOKEN_OVERRIDE,
+  tags: (p) => p.TAGS,
+});
+
 const ACCOUNT = TEST_AWS_ACCOUNT;
 const NO_LOG = { info() {}, warn() {}, error() {}, success() {} };
 

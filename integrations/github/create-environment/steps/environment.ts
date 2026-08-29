@@ -24,7 +24,7 @@ export const environmentStep: Step<Params> = {
     const { OWNER, REPO, ENVIRONMENT_NAME } = ctx.params;
 
     if ((await repoState(clients.rest, OWNER, REPO)) === "missing") {
-      ctx.log.warn(`Repo "${OWNER}/${REPO}" does not exist — run github/create-repo first.`);
+      ctx.log.warn(`Repo "${OWNER}/${REPO}" does not exist — create it first (gh repo create).`);
       return "conflict";
     }
 

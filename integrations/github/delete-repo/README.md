@@ -1,7 +1,7 @@
 # `github/delete-repo`
 
 Deletes a GitHub repo. Never creates one — this integration never runs
-`github/create-repo`'s job for you; that's a real precondition, not a cycle.
+your job to create; that's a real precondition, not a cycle.
 
 ```bash
 bun run bin/ferry.ts github/delete-repo --dry-run

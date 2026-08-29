@@ -27,8 +27,6 @@ const rotatePermissionsStep = iamConvergePolicyAttachmentsStep<RotateParams>({
 });
 import { deleteRoleStep } from "../../integrations/aws/iam/role/delete-role/steps/delete-role";
 import type { Params as DeleteRoleParams } from "../../integrations/aws/iam/role/delete-role/params";
-import { serviceLinkedRoleStep } from "../../integrations/aws/iam/role/create-service-linked-role/steps/service-linked-role";
-import type { Params as SlrParams } from "../../integrations/aws/iam/role/create-service-linked-role/params";
 import { auditStep } from "../../integrations/aws/iam/role/audit-unused-roles/steps/audit";
 import type { Params as AuditParams } from "../../integrations/aws/iam/role/audit-unused-roles/params";
 
@@ -175,29 +173,6 @@ describe("iam/role dry-run plan: rotate-role-permissions (always-reconcile)", ()
   test("check() always missing", async () => {
     const ctx = iamPlanCtx(params, () => ({}));
     expect(await rotatePermissionsStep.check(ctx)).toBe("missing");
-  });
-});
-
-describe("iam/role dry-run plan: create-service-linked-role", () => {
-  const params: SlrParams = {
-    AWS_SERVICE_NAME: "elasticbeanstalk.amazonaws.com",
-    EXPECTED_ROLE_NAME: "AWSServiceRoleForElasticBeanstalk",
-    CUSTOM_SUFFIX: undefined,
-    DESCRIPTION: undefined,
-  };
-
-  test("expected role missing -> missing", async () => {
-    const ctx = iamPlanCtx(params, () => {
-      throw notFound();
-    });
-    expect(await serviceLinkedRoleStep.check(ctx)).toBe("missing");
-  });
-
-  test("expected role already present -> exists", async () => {
-    const ctx = iamPlanCtx(params, () => ({
-      Role: { RoleName: params.EXPECTED_ROLE_NAME, Path: "/aws-service-role/elasticbeanstalk.amazonaws.com/" },
-    }));
-    expect(await serviceLinkedRoleStep.check(ctx)).toBe("exists");
   });
 });
 

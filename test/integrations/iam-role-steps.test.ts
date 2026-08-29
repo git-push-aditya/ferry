@@ -35,8 +35,6 @@ const rotatePermissionsStep = iamConvergePolicyAttachmentsStep<RotateParams>({
   desiredArns: (p) => p.DESIRED_POLICY_ARNS,
 });
 
-import { serviceLinkedRoleStep } from "../../integrations/aws/iam/role/create-service-linked-role/steps/service-linked-role";
-import type { Params as SlrParams } from "../../integrations/aws/iam/role/create-service-linked-role/params";
 
 
 import { auditStep } from "../../integrations/aws/iam/role/audit-unused-roles/steps/audit";
@@ -438,55 +436,6 @@ describe("rotate-role-permissions", () => {
 // ---------------------------------------------------------------------------
 // create-service-linked-role
 // ---------------------------------------------------------------------------
-
-const SLR_PARAMS: SlrParams = {
-  AWS_SERVICE_NAME: "elasticbeanstalk.amazonaws.com",
-  EXPECTED_ROLE_NAME: "AWSServiceRoleForElasticBeanstalk",
-};
-
-describe("create-service-linked-role", () => {
-  test("check() missing -> create() sends CreateServiceLinkedRoleCommand", async () => {
-    const sent: string[] = [];
-    const ctx = iamCtx(SLR_PARAMS, {}, (cmd) => {
-      sent.push(cmd.constructor.name);
-      if (cmd.constructor.name === "GetRoleCommand") return awsError("NoSuchEntityException");
-      if (cmd.constructor.name === "CreateServiceLinkedRoleCommand") {
-        expect(cmd.input.AWSServiceName).toBe(SLR_PARAMS.AWS_SERVICE_NAME);
-        return {
-          Role: { Arn: `arn:aws:iam::${ACCOUNT}:role/aws-service-role/x/AWSServiceRoleForElasticBeanstalk`, RoleName: SLR_PARAMS.EXPECTED_ROLE_NAME },
-        };
-      }
-      throw new Error(`unexpected ${cmd.constructor.name}`);
-    });
-    expect(await serviceLinkedRoleStep.check(ctx)).toBe("missing");
-    const outputs = await serviceLinkedRoleStep.create!(ctx);
-    expect(outputs.serviceLinkedRoleCreatedThisRun).toBe(true);
-    expect(outputs.roleName).toBe(SLR_PARAMS.EXPECTED_ROLE_NAME);
-    expect(sent).toEqual(["GetRoleCommand", "CreateServiceLinkedRoleCommand"]);
-  });
-
-  test("idempotency: EXPECTED_ROLE_NAME already exists -> exists, no create call", async () => {
-    const sent: string[] = [];
-    const ctx = iamCtx(SLR_PARAMS, {}, (cmd) => {
-      sent.push(cmd.constructor.name);
-      return { Role: {} };
-    });
-    expect(await serviceLinkedRoleStep.check(ctx)).toBe("exists");
-    expect(sent).toEqual(["GetRoleCommand"]);
-  });
-
-  test("rollback() starts async deletion and polls to a SUCCEEDED status", async () => {
-    const sent: string[] = [];
-    const ctx = iamCtx(SLR_PARAMS, { roleName: SLR_PARAMS.EXPECTED_ROLE_NAME }, (cmd) => {
-      sent.push(cmd.constructor.name);
-      if (cmd.constructor.name === "DeleteServiceLinkedRoleCommand") return { DeletionTaskId: "task-1" };
-      if (cmd.constructor.name === "GetServiceLinkedRoleDeletionStatusCommand") return { Status: "SUCCEEDED" };
-      throw new Error(`unexpected ${cmd.constructor.name}`);
-    });
-    await serviceLinkedRoleStep.rollback(ctx);
-    expect(sent).toEqual(["DeleteServiceLinkedRoleCommand", "GetServiceLinkedRoleDeletionStatusCommand"]);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // tag-role
