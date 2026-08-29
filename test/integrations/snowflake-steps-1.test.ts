@@ -5,15 +5,11 @@ import { onboardStep as onboardStagingStep } from "../../integrations/snowflake/
 import type { Params as OnboardStagingParams } from "../../integrations/snowflake/onboard-developer-staging/params";
 import { onboardStep as onboardProdStep } from "../../integrations/snowflake/onboard-developer-prod/steps/onboard";
 import type { Params as OnboardProdParams } from "../../integrations/snowflake/onboard-developer-prod/params";
-import { addKeyStep } from "../../integrations/snowflake/add-public-key-to-existing-user/steps/add-key";
-import type { Params as AddKeyParams } from "../../integrations/snowflake/add-public-key-to-existing-user/params";
 import { mintNewKeyStep } from "../../integrations/snowflake/rotate-user-key-pair/steps/mint-new-key";
 import { cutoverOldKeyStep } from "../../integrations/snowflake/rotate-user-key-pair/steps/cutover-old-key";
 import type { Params as RotateParams } from "../../integrations/snowflake/rotate-user-key-pair/params";
 import { updateRoleStep } from "../../integrations/snowflake/update-user-role/steps/update-role";
 import type { Params as UpdateRoleParams } from "../../integrations/snowflake/update-user-role/params";
-import { roleStep } from "../../integrations/snowflake/create-role/steps/role";
-import type { Params as CreateRoleParams } from "../../integrations/snowflake/create-role/params";
 import { grantStep } from "../../integrations/snowflake/grant-role-to-user/steps/grant";
 import type { Params as GrantParams } from "../../integrations/snowflake/grant-role-to-user/params";
 
@@ -101,96 +97,6 @@ describe.each([
     await step.rollback(ctx);
 
     expect(queries).toEqual(["DROP USER IF EXISTS JDOE;"]);
-  });
-});
-
-describe("add-public-key-to-existing-user", () => {
-  const PARAMS: AddKeyParams = {
-    USER_NAME: "JDOE",
-    PUBLIC_KEY: PEM_KEY,
-  };
-
-  function descRows(slot1Fp: string, slot2Fp: string) {
-    return [
-      { property: "RSA_PUBLIC_KEY_FP", property_value: slot1Fp },
-      { property: "RSA_PUBLIC_KEY_2_FP", property_value: slot2Fp },
-    ];
-  }
-
-  test("check(): user missing -> conflict", async () => {
-    const ctx = sfCtx(PARAMS, {}, async () => []);
-    expect(await addKeyStep.check(ctx)).toBe("conflict");
-  });
-
-  test("check(): slot 1 empty -> targets slot 1", async () => {
-    const ctx = sfCtx(PARAMS, {}, async (sql) =>
-      sql.startsWith("SHOW USERS") ? showRow("JDOE") : descRows("", ""),
-    );
-    expect(await addKeyStep.check(ctx)).toBe("missing");
-    expect(ctx.outputs.targetKeySlot).toBe("1");
-  });
-
-  test("check(): slot 1 occupied, slot 2 empty -> targets slot 2", async () => {
-    const ctx = sfCtx(PARAMS, {}, async (sql) =>
-      sql.startsWith("SHOW USERS") ? showRow("JDOE") : descRows("fp1", ""),
-    );
-    expect(await addKeyStep.check(ctx)).toBe("missing");
-    expect(ctx.outputs.targetKeySlot).toBe("2");
-  });
-
-  test("check(): both slots occupied without TARGET_SLOT -> conflict", async () => {
-    const ctx = sfCtx(PARAMS, {}, async (sql) =>
-      sql.startsWith("SHOW USERS") ? showRow("JDOE") : descRows("fp1", "fp2"),
-    );
-    expect(await addKeyStep.check(ctx)).toBe("conflict");
-  });
-
-  test("check(): both slots occupied but TARGET_SLOT pins the slot", async () => {
-    const ctx = sfCtx({ ...PARAMS, TARGET_SLOT: "2" as const }, {}, async (sql) =>
-      sql.startsWith("SHOW USERS") ? showRow("JDOE") : descRows("fp1", "fp2"),
-    );
-    expect(await addKeyStep.check(ctx)).toBe("missing");
-    expect(ctx.outputs.targetKeySlot).toBe("2");
-  });
-
-  test("create(): ALTER USER SET on the targeted slot", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(PARAMS, { targetKeySlot: "1" }, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    const outputs = await addKeyStep.create!(ctx);
-
-    expect(queries[0]).toBe(
-      "ALTER USER JDOE SET RSA_PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAabc123==';",
-    );
-    expect(outputs.addedKeyThisRun).toBe(true);
-    expect(outputs.targetKeySlot).toBe("1");
-  });
-
-  test("rollback(): unsets the slot only if this run set it", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(PARAMS, { addedKeyThisRun: true, targetKeySlot: "2" }, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await addKeyStep.rollback(ctx);
-
-    expect(queries).toEqual(["ALTER USER JDOE UNSET RSA_PUBLIC_KEY_2;"]);
-  });
-
-  test("rollback(): does nothing when this run did not add a key", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(PARAMS, {}, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await addKeyStep.rollback(ctx);
-
-    expect(queries).toEqual([]);
   });
 });
 
@@ -400,66 +306,6 @@ describe("update-user-role", () => {
     await updateRoleStep.rollback(ctx);
 
     expect(queries).toEqual([]);
-  });
-});
-
-describe("create-role", () => {
-  const PARAMS: CreateRoleParams = {
-    ROLE_NAME: "ANALYST",
-    INITIAL_GRANTS: [
-      { privilege: "USAGE", onType: "WAREHOUSE", onName: "COMPUTE_WH" },
-      { privilege: "USAGE", onType: "DATABASE", onName: "ANALYTICS" },
-    ],
-  };
-
-  test("check(): role missing -> missing", async () => {
-    const ctx = sfCtx(PARAMS, {}, async () => []);
-    expect(await roleStep.check(ctx)).toBe("missing");
-  });
-
-  test("check(): role exists -> exists", async () => {
-    const ctx = sfCtx(PARAMS, {}, async () => showRow("ANALYST"));
-    expect(await roleStep.check(ctx)).toBe("exists");
-  });
-
-  test("create(): CREATE ROLE IF NOT EXISTS plus looping INITIAL_GRANTS", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(PARAMS, {}, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    const outputs = await roleStep.create!(ctx);
-
-    expect(queries[0]).toBe("CREATE ROLE IF NOT EXISTS ANALYST;");
-    expect(queries[1]).toBe("GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE ANALYST;");
-    expect(queries[2]).toBe("GRANT USAGE ON DATABASE ANALYTICS TO ROLE ANALYST;");
-    expect(queries).toHaveLength(3);
-    expect(outputs.roleCreatedThisRun).toBe(true);
-  });
-
-  test("create(): no initial grants -> just CREATE ROLE", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx({ ...PARAMS, INITIAL_GRANTS: [] }, {}, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await roleStep.create!(ctx);
-
-    expect(queries).toEqual(["CREATE ROLE IF NOT EXISTS ANALYST;"]);
-  });
-
-  test("rollback(): DROP ROLE IF EXISTS", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(PARAMS, { roleCreatedThisRun: true }, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await roleStep.rollback(ctx);
-
-    expect(queries).toEqual(["DROP ROLE IF EXISTS ANALYST;"]);
   });
 });
 

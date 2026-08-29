@@ -15,7 +15,7 @@ bun run bin/ferry.ts snowflake/secrets-manager-snowflake-keypair-sync
 material.** `snowflake/rotate-user-key-pair` (already built) deliberately
 **never** touches a private key — its own `mint-new-key` step only ever
 receives an already-generated public half from the caller, and
-`github/create-deploy-key`'s docs take the same stance ("private key
+Ferry takes the same stance everywhere it touches one ("private key
 generation, if needed, happens outside this integration's scope"). This
 integration departs from that established pattern because the entire
 point of a Secrets-Manager-backed service credential is that nobody has

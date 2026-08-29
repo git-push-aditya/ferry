@@ -8,11 +8,7 @@ import deleteUserIntegration from "../../integrations/aws/iam/user/delete-user/i
 import { confirmDestructiveStep as deleteConfirmDestructiveStep } from "../../integrations/aws/iam/user/delete-user/steps/confirm-destructive";
 import type { Params as DeleteUserParams } from "../../integrations/aws/iam/user/delete-user/params";
 
-import attachPolicyIntegration from "../../integrations/aws/iam/user/attach-policy-to-user/integration";
-import type { Params as AttachPolicyParams } from "../../integrations/aws/iam/user/attach-policy-to-user/params";
 
-import detachPolicyIntegration from "../../integrations/aws/iam/user/detach-policy-from-user/integration";
-import type { Params as DetachPolicyParams } from "../../integrations/aws/iam/user/detach-policy-from-user/params";
 
 import createAccessKeyIntegration from "../../integrations/aws/iam/user/create-access-key/integration";
 import type { Params as CreateAccessKeyParams } from "../../integrations/aws/iam/user/create-access-key/params";
@@ -22,23 +18,14 @@ import { mintNewKeyStep } from "../../integrations/aws/iam/user/rotate-access-ke
 import { cutoverOldKeyStep } from "../../integrations/aws/iam/user/rotate-access-key/steps/cutover-old-key";
 import type { Params as RotateAccessKeyParams } from "../../integrations/aws/iam/user/rotate-access-key/params";
 
-import deactivateAccessKeyIntegration from "../../integrations/aws/iam/user/deactivate-access-key/integration";
-import type { Params as DeactivateAccessKeyParams } from "../../integrations/aws/iam/user/deactivate-access-key/params";
 
 import enforceMfaIntegration from "../../integrations/aws/iam/user/enforce-mfa/integration";
 import { mfaDeviceProvisionStep } from "../../integrations/aws/iam/user/enforce-mfa/steps/mfa-device-provision";
 import { mfaPolicyConditionStep } from "../../integrations/aws/iam/user/enforce-mfa/steps/mfa-policy-condition";
 import type { Params as EnforceMfaParams } from "../../integrations/aws/iam/user/enforce-mfa/params";
 
-import addUserToGroupIntegration from "../../integrations/aws/iam/user/add-user-to-group/integration";
-import type { Params as AddUserToGroupParams } from "../../integrations/aws/iam/user/add-user-to-group/params";
 
-import removeUserFromGroupIntegration from "../../integrations/aws/iam/user/remove-user-from-group/integration";
-import type { Params as RemoveUserFromGroupParams } from "../../integrations/aws/iam/user/remove-user-from-group/params";
 
-import tagUserIntegration from "../../integrations/aws/iam/user/tag-user/integration";
-import { tagsStep } from "../../integrations/aws/iam/user/tag-user/steps/tags";
-import type { Params as TagUserParams } from "../../integrations/aws/iam/user/tag-user/params";
 
 import offboardUserIntegration from "../../integrations/aws/iam/user/offboard-user/integration";
 import { confirmDestructiveStep as offboardConfirmDestructiveStep } from "../../integrations/aws/iam/user/offboard-user/steps/confirm-destructive";
@@ -138,214 +125,13 @@ describe("create-user", () => {
 // attach-policy-to-user
 // ---------------------------------------------------------------------------
 
-describe("attach-policy-to-user", () => {
-  const params: AttachPolicyParams = {
-    IAM_USER_NAME: "bob",
-    IAM_POLICY_ARN: `arn:aws:iam::${ACCOUNT}:policy/read-only`,
-  };
-  const [guardStep, attachStep] = attachPolicyIntegration.steps as [
-    import("../../src/core/define").Step<AttachPolicyParams>,
-    import("../../src/core/define").Step<AttachPolicyParams>,
-  ];
-
-  test("guard passes when user exists, then attach happy path", async () => {
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      if (c.constructor.name === "GetUserCommand") return {};
-      if (c.constructor.name === "ListAttachedUserPoliciesCommand") return { AttachedPolicies: [] };
-      return {};
-    });
-
-    expect(await guardStep.check(ctx)).toBe("exists");
-    expect(await attachStep.check(ctx)).toBe("missing");
-    const outputs = await attachStep.create!(ctx);
-
-    expect(names(sent)).toEqual([
-      "GetUserCommand",
-      "ListAttachedUserPoliciesCommand",
-      "AttachUserPolicyCommand",
-    ]);
-    expect(outputs).toEqual({ policyAttachedThisRun: true });
-  });
-
-  test("guard folds a missing user into conflict", async () => {
-    const ctx = iamCtx(params, {}, () => nse());
-    expect(await guardStep.check(ctx)).toBe("conflict");
-  });
-
-  test("idempotency: already attached -> check reports exists", async () => {
-    const ctx = iamCtx(params, {}, (c) =>
-      c.constructor.name === "ListAttachedUserPoliciesCommand"
-        ? { AttachedPolicies: [{ PolicyArn: params.IAM_POLICY_ARN }] }
-        : {},
-    );
-    expect(await attachStep.check(ctx)).toBe("exists");
-  });
-
-  test("rollback detaches the policy", async () => {
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      return {};
-    });
-
-    await attachStep.rollback(ctx);
-
-    expect(names(sent)).toEqual(["DetachUserPolicyCommand"]);
-    expect(sent[0].input).toEqual({ UserName: "bob", PolicyArn: params.IAM_POLICY_ARN });
-  });
-});
-
 // ---------------------------------------------------------------------------
 // detach-policy-from-user
 // ---------------------------------------------------------------------------
 
-describe("detach-policy-from-user", () => {
-  const params: DetachPolicyParams = {
-    IAM_USER_NAME: "bob",
-    IAM_POLICY_ARN: `arn:aws:iam::${ACCOUNT}:policy/read-only`,
-  };
-  const [detachStep] = detachPolicyIntegration.steps as [import("../../src/core/define").Step<DetachPolicyParams>];
-
-  test("happy path: attached -> detach sends DetachUserPolicyCommand", async () => {
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      if (c.constructor.name === "ListAttachedUserPoliciesCommand") {
-        return { AttachedPolicies: [{ PolicyArn: params.IAM_POLICY_ARN }] };
-      }
-      return {};
-    });
-
-    expect(await detachStep.check(ctx)).toBe("missing");
-    const outputs = await detachStep.create!(ctx);
-
-    expect(names(sent)).toEqual(["ListAttachedUserPoliciesCommand", "DetachUserPolicyCommand"]);
-    expect(outputs).toEqual({ policyDetachedThisRun: true });
-  });
-
-  test("idempotency: no attachment -> exists (no-op)", async () => {
-    const ctx = iamCtx(params, {}, () => ({ AttachedPolicies: [] }));
-    expect(await detachStep.check(ctx)).toBe("exists");
-  });
-
-  test("idempotency: user already gone -> treated as exists (safe no-op)", async () => {
-    const ctx = iamCtx(params, {}, () => nse());
-    expect(await detachStep.check(ctx)).toBe("exists");
-  });
-
-  test("rollback re-attaches the policy", async () => {
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      return {};
-    });
-
-    await detachStep.rollback(ctx);
-
-    expect(names(sent)).toEqual(["AttachUserPolicyCommand"]);
-    expect(sent[0].input).toEqual({ UserName: "bob", PolicyArn: params.IAM_POLICY_ARN });
-  });
-});
-
 // ---------------------------------------------------------------------------
 // add-user-to-group / remove-user-from-group
 // ---------------------------------------------------------------------------
-
-describe("add-user-to-group", () => {
-  const params: AddUserToGroupParams = { IAM_USER_NAME: "carol", IAM_GROUP_NAME: "developers" };
-  const [guardStep, addStep] = addUserToGroupIntegration.steps as [
-    import("../../src/core/define").Step<AddUserToGroupParams>,
-    import("../../src/core/define").Step<AddUserToGroupParams>,
-  ];
-
-  test("happy path: not a member -> add sends AddUserToGroupCommand", async () => {
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      if (c.constructor.name === "GetUserCommand") return {};
-      if (c.constructor.name === "ListGroupsForUserCommand") return { Groups: [] };
-      return {};
-    });
-
-    expect(await guardStep.check(ctx)).toBe("exists");
-    expect(await addStep.check(ctx)).toBe("missing");
-    const outputs = await addStep.create!(ctx);
-
-    expect(names(sent)).toEqual([
-      "GetUserCommand",
-      "ListGroupsForUserCommand",
-      "AddUserToGroupCommand",
-    ]);
-    expect(outputs).toEqual({ addedToGroupThisRun: true });
-  });
-
-  test("idempotency: already a member -> exists", async () => {
-    const ctx = iamCtx(params, {}, () => ({ Groups: [{ GroupName: "developers" }] }));
-    expect(await addStep.check(ctx)).toBe("exists");
-  });
-
-  test("rollback removes user from group", async () => {
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      return {};
-    });
-
-    await addStep.rollback(ctx);
-
-    expect(names(sent)).toEqual(["RemoveUserFromGroupCommand"]);
-    expect(sent[0].input).toEqual({ UserName: "carol", GroupName: "developers" });
-  });
-});
-
-describe("remove-user-from-group", () => {
-  const params: RemoveUserFromGroupParams = { IAM_USER_NAME: "carol", IAM_GROUP_NAME: "developers" };
-  const [removeStep] = removeUserFromGroupIntegration.steps as [
-    import("../../src/core/define").Step<RemoveUserFromGroupParams>,
-  ];
-
-  test("happy path: is a member -> remove sends RemoveUserFromGroupCommand", async () => {
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      if (c.constructor.name === "ListGroupsForUserCommand") {
-        return { Groups: [{ GroupName: "developers" }] };
-      }
-      return {};
-    });
-
-    expect(await removeStep.check(ctx)).toBe("missing");
-    const outputs = await removeStep.create!(ctx);
-
-    expect(names(sent)).toEqual(["ListGroupsForUserCommand", "RemoveUserFromGroupCommand"]);
-    expect(outputs).toEqual({ removedFromGroupThisRun: true });
-  });
-
-  test("idempotency: not a member -> exists (no-op)", async () => {
-    const ctx = iamCtx(params, {}, () => ({ Groups: [] }));
-    expect(await removeStep.check(ctx)).toBe("exists");
-  });
-
-  test("idempotency: user already gone -> treated as exists", async () => {
-    const ctx = iamCtx(params, {}, () => nse());
-    expect(await removeStep.check(ctx)).toBe("exists");
-  });
-
-  test("rollback re-adds user to group", async () => {
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      return {};
-    });
-
-    await removeStep.rollback(ctx);
-
-    expect(names(sent)).toEqual(["AddUserToGroupCommand"]);
-    expect(sent[0].input).toEqual({ UserName: "carol", GroupName: "developers" });
-  });
-});
 
 // ---------------------------------------------------------------------------
 // create-access-key: 2-key cap logic
@@ -579,51 +365,6 @@ describe("rotate-access-key", () => {
 // deactivate-access-key
 // ---------------------------------------------------------------------------
 
-describe("deactivate-access-key", () => {
-  const [statusStep] = deactivateAccessKeyIntegration.steps as [
-    import("../../src/core/define").Step<DeactivateAccessKeyParams>,
-  ];
-  const params: DeactivateAccessKeyParams = { IAM_USER_NAME: "frank", ACCESS_KEY_ID: "AKIA1" };
-
-  test("happy path: Active key -> Inactive via UpdateAccessKeyCommand", async () => {
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      if (c.constructor.name === "ListAccessKeysCommand") {
-        return { AccessKeyMetadata: [{ AccessKeyId: "AKIA1", Status: "Active" }] };
-      }
-      return {};
-    });
-
-    expect(await statusStep.check(ctx)).toBe("missing");
-    const outputs = await statusStep.create!(ctx);
-
-    const updateCall = sent.find((c) => c.constructor.name === "UpdateAccessKeyCommand")!;
-    expect(updateCall.input).toEqual({ UserName: "frank", AccessKeyId: "AKIA1", Status: "Inactive" });
-    expect(outputs).toEqual({ priorAccessKeyStatus: "Active" });
-  });
-
-  test("idempotency: already Inactive -> exists", async () => {
-    const ctx = iamCtx(params, {}, () => ({
-      AccessKeyMetadata: [{ AccessKeyId: "AKIA1", Status: "Inactive" }],
-    }));
-    expect(await statusStep.check(ctx)).toBe("exists");
-  });
-
-  test("rollback restores prior status", async () => {
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, { priorAccessKeyStatus: "Active" }, (c) => {
-      sent.push(c);
-      return {};
-    });
-
-    await statusStep.rollback(ctx);
-
-    expect(names(sent)).toEqual(["UpdateAccessKeyCommand"]);
-    expect(sent[0].input).toEqual({ UserName: "frank", AccessKeyId: "AKIA1", Status: "Active" });
-  });
-});
-
 // ---------------------------------------------------------------------------
 // enforce-mfa
 // ---------------------------------------------------------------------------
@@ -815,97 +556,6 @@ describe("enforce-mfa: policy-condition (whole-document replace)", () => {
 // ---------------------------------------------------------------------------
 // tag-user: additive vs prune
 // ---------------------------------------------------------------------------
-
-describe("tag-user", () => {
-  test("PRUNE_UNMANAGED_TAGS=false: additive only, never deletes unmanaged tags", async () => {
-    const params: TagUserParams = {
-      IAM_USER_NAME: "hank",
-      TAGS_JSON: JSON.stringify({ env: "prod" }),
-      PRUNE_UNMANAGED_TAGS: false,
-    };
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      if (c.constructor.name === "ListUserTagsCommand") {
-        return { Tags: [{ Key: "env", Value: "dev" }, { Key: "owner", Value: "team-a" }] };
-      }
-      return {};
-    });
-
-    const outputs = await tagsStep.reconcile!(ctx);
-
-    expect(names(sent)).toEqual(["ListUserTagsCommand", "TagUserCommand"]);
-    const tagCall = sent.find((c) => c.constructor.name === "TagUserCommand")!;
-    expect(tagCall.input).toEqual({ UserName: "hank", Tags: [{ Key: "env", Value: "prod" }] });
-    expect(names(sent)).not.toContain("UntagUserCommand");
-    expect(JSON.parse(outputs.priorTags as string)).toEqual({ env: "dev", owner: "team-a" });
-  });
-
-  test("PRUNE_UNMANAGED_TAGS=true: prunes tags absent from TAGS_JSON", async () => {
-    const params: TagUserParams = {
-      IAM_USER_NAME: "hank",
-      TAGS_JSON: JSON.stringify({ env: "prod" }),
-      PRUNE_UNMANAGED_TAGS: true,
-    };
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      if (c.constructor.name === "ListUserTagsCommand") {
-        return { Tags: [{ Key: "env", Value: "prod" }, { Key: "owner", Value: "team-a" }] };
-      }
-      return {};
-    });
-
-    const outputs = await tagsStep.reconcile!(ctx);
-
-    const untagCall = sent.find((c) => c.constructor.name === "UntagUserCommand")!;
-    expect(untagCall.input).toEqual({ UserName: "hank", TagKeys: ["owner"] });
-    expect(names(sent)).not.toContain("TagUserCommand"); // env already matches
-    expect(JSON.parse(outputs.prunedThisRun as string)).toEqual(["owner"]);
-  });
-
-  test("idempotency: TAGS_JSON empty -> untouched", async () => {
-    const params: TagUserParams = { IAM_USER_NAME: "hank", TAGS_JSON: "", PRUNE_UNMANAGED_TAGS: false };
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, {}, (c) => {
-      sent.push(c);
-      return {};
-    });
-
-    const outputs = await tagsStep.reconcile!(ctx);
-
-    expect(sent).toEqual([]);
-    expect(outputs).toEqual({});
-  });
-
-  test("rollback restores prior tags: strips introduced keys, restores overwritten and pruned", async () => {
-    const params: TagUserParams = {
-      IAM_USER_NAME: "hank",
-      TAGS_JSON: JSON.stringify({ env: "prod", team: "core" }),
-      PRUNE_UNMANAGED_TAGS: true,
-    };
-    const outputs = {
-      priorTags: JSON.stringify({ env: "dev", owner: "team-a" }),
-      prunedThisRun: JSON.stringify(["owner"]),
-    };
-    const sent: FakeCommand[] = [];
-    const ctx = iamCtx(params, outputs, (c) => {
-      sent.push(c);
-      return {};
-    });
-
-    await tagsStep.rollback(ctx);
-
-    const untagCall = sent.find((c) => c.constructor.name === "UntagUserCommand")!;
-    expect(untagCall.input).toEqual({ UserName: "hank", TagKeys: ["team"] }); // introduced key stripped
-
-    const tagCalls = sent.filter((c) => c.constructor.name === "TagUserCommand");
-    // one TagUser call restores overwritten "env", another restores pruned "owner"
-    const allTags = tagCalls.flatMap((c) => c.input.Tags as { Key: string; Value: string }[]);
-    expect(allTags).toContainEqual({ Key: "env", Value: "dev" });
-    expect(allTags).toContainEqual({ Key: "owner", Value: "team-a" });
-  });
-});
 
 // ---------------------------------------------------------------------------
 // delete-user / offboard-user: iamUserTeardownStep
@@ -1190,5 +840,4 @@ describe("offboard-user", () => {
 void deleteUserIntegration;
 void offboardUserIntegration;
 void enforceMfaIntegration;
-void tagUserIntegration;
 void rotateAccessKeyIntegration;

@@ -15,7 +15,7 @@ import { verify } from "./verify";
  * copy them, and reading them live off the old bucket to mirror onto the new
  * one doesn't fit this project's step contract (a step's desired-state
  * accessors are functions of params, not of another step's live-read
- * outputs). Run `aws/s3/update-bucket-versioning`, `update-bucket-encryption`,
+ * outputs). Re-apply versioning, encryption and tagging on the new bucket,
  * `update-bucket-permissions`, and `tag-bucket` against the new bucket
  * afterward if you need those carried over — see README.
  */
@@ -66,10 +66,8 @@ Versioning, default encryption, public-access-block, bucket policy, and tags
 are **not** mirrored onto the new bucket by this integration. Run these
 against \`${p.NEW_S3_BUCKET_NAME}\` afterward if the old bucket had them:
 
-- \`aws/s3/update-bucket-versioning\`
-- \`aws/s3/update-bucket-encryption\`
 - \`aws/s3/update-bucket-permissions\`
-- \`aws/s3/tag-bucket\`
+- versioning, encryption and tagging (set these directly)
 `;
   },
 });

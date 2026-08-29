@@ -4,10 +4,6 @@ import { revokeStep } from "../../integrations/snowflake/revoke-role-from-user/s
 import type { Params as RevokeParams } from "../../integrations/snowflake/revoke-role-from-user/params";
 import { offboardStep } from "../../integrations/snowflake/offboard-developer/steps/offboard";
 import type { Params as OffboardParams } from "../../integrations/snowflake/offboard-developer/params";
-import { warehouseStep } from "../../integrations/snowflake/create-warehouse/steps/warehouse";
-import type { Params as CreateWarehouseParams } from "../../integrations/snowflake/create-warehouse/params";
-import { resizeStep } from "../../integrations/snowflake/update-warehouse-size/steps/resize";
-import type { Params as ResizeWarehouseParams } from "../../integrations/snowflake/update-warehouse-size/params";
 import { grantAccessStep } from "../../integrations/snowflake/grant-database-schema-access/steps/grant-access";
 import type { Params as GrantAccessParams } from "../../integrations/snowflake/grant-database-schema-access/params";
 import { auditStep } from "../../integrations/snowflake/audit-user-access/steps/audit";
@@ -69,39 +65,6 @@ describe("snowflake dry-run plan: offboard-developer (inverted create-or-skip)",
       return [];
     });
     expect(await offboardStep.check(ctx)).toBe("missing");
-  });
-});
-
-describe("snowflake dry-run plan: create-warehouse", () => {
-  const params: CreateWarehouseParams = {
-    WAREHOUSE_NAME: "COMPUTE_WH",
-    WAREHOUSE_SIZE: "XSMALL",
-    AUTO_SUSPEND_SECONDS: 60,
-    AUTO_RESUME: true,
-  };
-
-  test("warehouse missing -> missing", async () => {
-    const ctx = sfPlanCtx(params, async () => []);
-    expect(await warehouseStep.check(ctx)).toBe("missing");
-  });
-
-  test("warehouse already exists -> exists", async () => {
-    const ctx = sfPlanCtx(params, async () => [{ name: "COMPUTE_WH" }]);
-    expect(await warehouseStep.check(ctx)).toBe("exists");
-  });
-});
-
-describe("snowflake dry-run plan: update-warehouse-size (always-reconcile)", () => {
-  const params: ResizeWarehouseParams = { WAREHOUSE_NAME: "COMPUTE_WH", TARGET_SIZE: "MEDIUM" };
-
-  test("warehouse missing -> conflict (never creates one)", async () => {
-    const ctx = sfPlanCtx(params, async () => []);
-    expect(await resizeStep.check(ctx)).toBe("conflict");
-  });
-
-  test("warehouse present -> missing (reconcile's own diff decides)", async () => {
-    const ctx = sfPlanCtx(params, async () => [{ name: "COMPUTE_WH", size: "SMALL" }]);
-    expect(await resizeStep.check(ctx)).toBe("missing");
   });
 });
 

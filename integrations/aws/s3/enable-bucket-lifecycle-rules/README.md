@@ -45,7 +45,7 @@ single step — a step-factory expanding into N independent steps would be the
 wrong shape here (that pattern fits N independently-identified resources,
 which these rules are not).
 
-**Run `aws/s3/update-bucket-versioning` first if any rule references
+**Enable bucket versioning first if any rule references
 noncurrent versions.** A `NoncurrentVersionExpiration` rule on a
 never-versioned bucket is accepted by the API but is a silent no-op.
 

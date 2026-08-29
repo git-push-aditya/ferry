@@ -4,10 +4,6 @@ import { revokeStep } from "../../integrations/snowflake/revoke-role-from-user/s
 import type { Params as RevokeParams } from "../../integrations/snowflake/revoke-role-from-user/params";
 import { offboardStep } from "../../integrations/snowflake/offboard-developer/steps/offboard";
 import type { Params as OffboardParams } from "../../integrations/snowflake/offboard-developer/params";
-import { warehouseStep } from "../../integrations/snowflake/create-warehouse/steps/warehouse";
-import type { Params as CreateWarehouseParams } from "../../integrations/snowflake/create-warehouse/params";
-import { resizeStep } from "../../integrations/snowflake/update-warehouse-size/steps/resize";
-import type { Params as ResizeParams } from "../../integrations/snowflake/update-warehouse-size/params";
 import { grantAccessStep } from "../../integrations/snowflake/grant-database-schema-access/steps/grant-access";
 import type { Params as GrantParams } from "../../integrations/snowflake/grant-database-schema-access/params";
 import { auditStep } from "../../integrations/snowflake/audit-user-access/steps/audit";
@@ -213,127 +209,6 @@ describe("offboard-developer", () => {
     });
 
     await offboardStep.rollback(ctx);
-
-    expect(queries).toEqual([]);
-  });
-});
-
-const CREATE_WH_PARAMS: CreateWarehouseParams = {
-  WAREHOUSE_NAME: "FERRY_WH",
-  WAREHOUSE_SIZE: "MEDIUM",
-  AUTO_SUSPEND_SECONDS: 120,
-  AUTO_RESUME: true,
-};
-
-describe("create-warehouse", () => {
-  test("check(): reflects warehouseState", async () => {
-    const ctx = sfCtx(CREATE_WH_PARAMS, {}, async () => []);
-    expect(await warehouseStep.check(ctx)).toBe("missing");
-  });
-
-  test("create(): CREATE WAREHOUSE IF NOT EXISTS with INITIALLY_SUSPENDED and the right clauses", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(CREATE_WH_PARAMS, {}, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await warehouseStep.create!(ctx);
-
-    expect(queries).toHaveLength(1);
-    const sql = queries[0]!;
-    expect(sql).toContain("CREATE WAREHOUSE IF NOT EXISTS FERRY_WH");
-    expect(sql).not.toContain("CREATE OR REPLACE");
-    expect(sql).toContain("WAREHOUSE_SIZE = 'MEDIUM'");
-    expect(sql).toContain("AUTO_SUSPEND = 120");
-    expect(sql).toContain("AUTO_RESUME = TRUE");
-    expect(sql).toContain("INITIALLY_SUSPENDED = TRUE");
-  });
-
-  test("create(): AUTO_RESUME=false renders FALSE", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx({ ...CREATE_WH_PARAMS, AUTO_RESUME: false }, {}, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await warehouseStep.create!(ctx);
-
-    expect(queries[0]).toContain("AUTO_RESUME = FALSE");
-  });
-
-  test("rollback(): DROP WAREHOUSE IF EXISTS", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(CREATE_WH_PARAMS, {}, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await warehouseStep.rollback(ctx);
-
-    expect(queries).toEqual(["DROP WAREHOUSE IF EXISTS FERRY_WH;"]);
-  });
-});
-
-const RESIZE_PARAMS: ResizeParams = { WAREHOUSE_NAME: "FERRY_WH", TARGET_SIZE: "LARGE" };
-
-describe("update-warehouse-size", () => {
-  test("check(): warehouse exists -> missing (route to reconcile)", async () => {
-    const ctx = sfCtx(RESIZE_PARAMS, {}, async () => [{ name: "FERRY_WH" }]);
-    expect(await resizeStep.check(ctx)).toBe("missing");
-  });
-
-  test("check(): warehouse absent -> conflict (real precondition failure)", async () => {
-    const ctx = sfCtx(RESIZE_PARAMS, {}, async () => []);
-    expect(await resizeStep.check(ctx)).toBe("conflict");
-  });
-
-  test("reconcile(): no-op short-circuit when already at target size — no ALTER issued", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(RESIZE_PARAMS, {}, async (sql) => {
-      queries.push(sql);
-      return [{ name: "FERRY_WH", size: "LARGE" }];
-    });
-
-    const outputs = await resizeStep.reconcile!(ctx);
-
-    expect(queries).toEqual(["SHOW WAREHOUSES LIKE 'FERRY_WH';"]);
-    expect(outputs.priorSize).toBeUndefined();
-  });
-
-  test("reconcile(): issues ALTER WAREHOUSE SET WAREHOUSE_SIZE when different, capturing prior size", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(RESIZE_PARAMS, {}, async (sql) => {
-      queries.push(sql);
-      return sql.startsWith("SHOW") ? [{ name: "FERRY_WH", size: "SMALL" }] : [];
-    });
-
-    const outputs = await resizeStep.reconcile!(ctx);
-
-    expect(queries[1]).toBe("ALTER WAREHOUSE FERRY_WH SET WAREHOUSE_SIZE = 'LARGE';");
-    expect(outputs.priorSize).toBe("SMALL");
-  });
-
-  test("rollback(): restores captured prior size", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(RESIZE_PARAMS, { priorSize: "SMALL" }, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await resizeStep.rollback(ctx);
-
-    expect(queries).toEqual(["ALTER WAREHOUSE FERRY_WH SET WAREHOUSE_SIZE = 'SMALL';"]);
-  });
-
-  test("rollback(): skipped when reconcile was a no-op (no priorSize captured)", async () => {
-    const queries: string[] = [];
-    const ctx = sfCtx(RESIZE_PARAMS, {}, async (sql) => {
-      queries.push(sql);
-      return [];
-    });
-
-    await resizeStep.rollback(ctx);
 
     expect(queries).toEqual([]);
   });

@@ -5,15 +5,11 @@ import { onboardStep as onboardStagingStep } from "../../integrations/snowflake/
 import type { Params as OnboardStagingParams } from "../../integrations/snowflake/onboard-developer-staging/params";
 import { onboardStep as onboardProdStep } from "../../integrations/snowflake/onboard-developer-prod/steps/onboard";
 import type { Params as OnboardProdParams } from "../../integrations/snowflake/onboard-developer-prod/params";
-import { addKeyStep } from "../../integrations/snowflake/add-public-key-to-existing-user/steps/add-key";
-import type { Params as AddKeyParams } from "../../integrations/snowflake/add-public-key-to-existing-user/params";
 import { mintNewKeyStep } from "../../integrations/snowflake/rotate-user-key-pair/steps/mint-new-key";
 import { cutoverOldKeyStep } from "../../integrations/snowflake/rotate-user-key-pair/steps/cutover-old-key";
 import type { Params as RotateParams } from "../../integrations/snowflake/rotate-user-key-pair/params";
 import { updateRoleStep } from "../../integrations/snowflake/update-user-role/steps/update-role";
 import type { Params as UpdateRoleParams } from "../../integrations/snowflake/update-user-role/params";
-import { roleStep } from "../../integrations/snowflake/create-role/steps/role";
-import type { Params as CreateRoleParams } from "../../integrations/snowflake/create-role/params";
 import { grantStep } from "../../integrations/snowflake/grant-role-to-user/steps/grant";
 import type { Params as GrantParams } from "../../integrations/snowflake/grant-role-to-user/params";
 
@@ -65,29 +61,6 @@ describe.each([
   test("plan: user exists -> exists", async () => {
     const ctx = sfCtx(PARAMS, {}, async () => showRow("JDOE"));
     expect(await step.check(ctx)).toBe("exists");
-  });
-});
-
-describe("add-public-key-to-existing-user plan", () => {
-  const PARAMS: AddKeyParams = { USER_NAME: "JDOE", PUBLIC_KEY: "bare-base64-key" };
-
-  function descRows(slot1Fp: string, slot2Fp: string) {
-    return [
-      { property: "RSA_PUBLIC_KEY_FP", property_value: slot1Fp },
-      { property: "RSA_PUBLIC_KEY_2_FP", property_value: slot2Fp },
-    ];
-  }
-
-  test("plan: user missing -> conflict", async () => {
-    const ctx = sfCtx(PARAMS, {}, async () => []);
-    expect(await addKeyStep.check(ctx)).toBe("conflict");
-  });
-
-  test("plan: both slots occupied, no TARGET_SLOT -> conflict", async () => {
-    const ctx = sfCtx(PARAMS, {}, async (sql) =>
-      sql.startsWith("SHOW USERS") ? showRow("JDOE") : descRows("fp1", "fp2"),
-    );
-    expect(await addKeyStep.check(ctx)).toBe("conflict");
   });
 });
 
@@ -147,20 +120,6 @@ describe("update-user-role plan", () => {
   test("plan: default role differs -> missing", async () => {
     const ctx = sfCtx(PARAMS, {}, async () => userDescRows("DEVELOPER"));
     expect(await updateRoleStep.check(ctx)).toBe("missing");
-  });
-});
-
-describe("create-role plan", () => {
-  const PARAMS: CreateRoleParams = { ROLE_NAME: "ANALYST", INITIAL_GRANTS: [] };
-
-  test("plan: role missing -> missing", async () => {
-    const ctx = sfCtx(PARAMS, {}, async () => []);
-    expect(await roleStep.check(ctx)).toBe("missing");
-  });
-
-  test("plan: role exists -> exists", async () => {
-    const ctx = sfCtx(PARAMS, {}, async () => showRow("ANALYST"));
-    expect(await roleStep.check(ctx)).toBe("exists");
   });
 });
 

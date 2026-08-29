@@ -20,8 +20,6 @@ import type { Params as RotateParams } from "../../integrations/aws/iam/user/rot
 import { mfaDeviceProvisionStep } from "../../integrations/aws/iam/user/enforce-mfa/steps/mfa-device-provision";
 import { mfaPolicyConditionStep } from "../../integrations/aws/iam/user/enforce-mfa/steps/mfa-policy-condition";
 import type { Params as MfaParams } from "../../integrations/aws/iam/user/enforce-mfa/params";
-import { tagsStep } from "../../integrations/aws/iam/user/tag-user/steps/tags";
-import type { Params as TagUserParams } from "../../integrations/aws/iam/user/tag-user/params";
 
 import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
 const ACCOUNT = TEST_AWS_ACCOUNT;
@@ -110,35 +108,6 @@ describe("iam/user dry-run plan: attach/detach-policy-to-user", () => {
   });
 });
 
-describe("iam/user dry-run plan: add/remove-user-from-group", () => {
-  const userName = () => "alice";
-  const groupName = () => "developers";
-
-  test("add: not a member -> missing", async () => {
-    const ctx = iamPlanCtx({}, () => ({ Groups: [] }));
-    const step = iamAddUserToGroupStep<Record<string, never>>({ userName, groupName });
-    expect(await step.check(ctx)).toBe("missing");
-  });
-
-  test("add: already a member -> exists", async () => {
-    const ctx = iamPlanCtx({}, () => ({ Groups: [{ GroupName: "developers" }] }));
-    const step = iamAddUserToGroupStep<Record<string, never>>({ userName, groupName });
-    expect(await step.check(ctx)).toBe("exists");
-  });
-
-  test("remove: not a member -> exists (already achieved)", async () => {
-    const ctx = iamPlanCtx({}, () => ({ Groups: [] }));
-    const step = iamRemoveUserFromGroupStep<Record<string, never>>({ userName, groupName });
-    expect(await step.check(ctx)).toBe("exists");
-  });
-
-  test("remove: currently a member -> missing", async () => {
-    const ctx = iamPlanCtx({}, () => ({ Groups: [{ GroupName: "developers" }] }));
-    const step = iamRemoveUserFromGroupStep<Record<string, never>>({ userName, groupName });
-    expect(await step.check(ctx)).toBe("missing");
-  });
-});
-
 describe("iam/user dry-run plan: create-access-key (2-key cap)", () => {
   const userName = () => "alice";
 
@@ -166,45 +135,6 @@ describe("iam/user dry-run plan: create-access-key (2-key cap)", () => {
     }));
     const step = iamAccessKeyStep<Record<string, never>>({ userName, allowSecondKey: () => true });
     expect(await step.check(ctx)).toBe("exists");
-  });
-});
-
-describe("iam/user dry-run plan: deactivate-access-key / rotate-access-key cutover (iamAccessKeyStatusStep)", () => {
-  const userName = () => "alice";
-  const accessKeyId = () => "AKIA1";
-
-  test("key currently Active, desired Inactive -> missing", async () => {
-    const ctx = iamPlanCtx({}, () => ({
-      AccessKeyMetadata: [{ AccessKeyId: "AKIA1", Status: "Active" }],
-    }));
-    const step = iamAccessKeyStatusStep<Record<string, never>>({
-      userName,
-      accessKeyId,
-      desired: () => "Inactive",
-    });
-    expect(await step.check(ctx)).toBe("missing");
-  });
-
-  test("key already Inactive, desired Inactive -> exists", async () => {
-    const ctx = iamPlanCtx({}, () => ({
-      AccessKeyMetadata: [{ AccessKeyId: "AKIA1", Status: "Inactive" }],
-    }));
-    const step = iamAccessKeyStatusStep<Record<string, never>>({
-      userName,
-      accessKeyId,
-      desired: () => "Inactive",
-    });
-    expect(await step.check(ctx)).toBe("exists");
-  });
-
-  test("key already gone -> missing (nothing to toggle, per the factory's own contract)", async () => {
-    const ctx = iamPlanCtx({}, () => ({ AccessKeyMetadata: [] }));
-    const step = iamAccessKeyStatusStep<Record<string, never>>({
-      userName,
-      accessKeyId,
-      desired: () => "Inactive",
-    });
-    expect(await step.check(ctx)).toBe("missing");
   });
 });
 
@@ -299,15 +229,3 @@ describe("iam/user dry-run plan: enforce-mfa two independent steps", () => {
   });
 });
 
-describe("iam/user dry-run plan: tag-user (always-reconcile)", () => {
-  const params: TagUserParams = {
-    IAM_USER_NAME: "alice",
-    TAGS_JSON: JSON.stringify({ team: "core" }),
-    PRUNE_UNMANAGED_TAGS: false,
-  };
-
-  test("check() always missing", async () => {
-    const ctx = iamPlanCtx(params, () => ({}));
-    expect(await tagsStep.check(ctx)).toBe("missing");
-  });
-});

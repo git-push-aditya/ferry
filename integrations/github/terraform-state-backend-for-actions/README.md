@@ -15,7 +15,7 @@ bun run bin/ferry.ts github/terraform-state-backend-for-actions
 | --- | --- | --- |
 | `iam-role-exists` | (guard) confirms `AWS_ROLE_NAME` already exists | conflict if it doesn't — run `github/setup-github-actions-oidc-role` first |
 | `s3-bucket` | the state bucket | create-or-skip — reused from `aws/s3/create-bucket`'s own `s3BucketStep` factory |
-| `bucket-versioning` | bucket versioning, forced `Enabled` | always-reconcile — reused from `aws/s3/update-bucket-versioning`'s own `s3VersioningStep` factory |
+| `bucket-versioning` | bucket versioning, forced `Enabled` | always-reconcile — the shared `s3VersioningStep` factory |
 | `inline-policy` | the CI role's scoped S3 policy | always-reconcile — the shared `iamInlinePolicyStep` factory |
 | `verify` | polls versioning + re-reads the policy | — |
 
@@ -50,7 +50,7 @@ before writing this into an OpenTofu-specific runbook.
 
 **Versioning is forced `Enabled`, not configurable.** Terraform's native
 locking mechanism assumes it; this integration does not expose a way to
-turn it off, unlike `aws/s3/update-bucket-versioning`'s own general-purpose
+turn it off, unlike the shared `s3VersioningStep`'s own general-purpose
 task.
 
 **Bucket rollback follows `aws/s3/create-bucket`'s own convention** — it

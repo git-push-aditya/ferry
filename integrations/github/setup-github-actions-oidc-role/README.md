@@ -38,9 +38,7 @@ validates against a live GitHub API. No `GITHUB_TOKEN` needed.
 possible or attempted.** A misconfigured `sub` claim (wrong repo name, say)
 only surfaces later when a real workflow run attempts
 `AssumeRoleWithWebIdentity` and AWS rejects the mismatched claim — an
-inherent boundary of this integration's `verify()`, same class as
-`resize-ebs-volume`'s filesystem-extension boundary. Chain
-`github/trigger-workflow-dispatch` (with `WAIT_FOR_COMPLETION=true`)
+inherent boundary of this integration's `verify()`. Run `gh workflow run`
 against a dedicated smoke-test workflow afterward for a real end-to-end
 confirmation — not built into this task automatically, since forcing a live
 workflow run on every apply would be a surprising, costly side effect.

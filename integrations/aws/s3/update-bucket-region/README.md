@@ -33,10 +33,9 @@ one doesn't fit this project's step contract (a step's desired-state
 accessors are pure functions of params, not of another step's live-read
 outputs). Run these against the new bucket afterward if you need them:
 
-- `aws/s3/update-bucket-versioning`
-- `aws/s3/update-bucket-encryption`
 - `aws/s3/update-bucket-permissions`
-- `aws/s3/tag-bucket`
+- versioning, encryption and tagging (set these directly; Ferry no longer
+  ships single-call integrations for them)
 
 ## The ordering invariant
 

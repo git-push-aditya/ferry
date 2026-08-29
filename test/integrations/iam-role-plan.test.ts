@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { StepContext } from "../../src/core/define";
-import { iamRoleStep, iamRoleExistsGuardStep, iamAttachRolePolicyStep, iamDetachRolePolicyStep } from "../../src/providers/aws/iam";
+import { iamRoleExistsGuardStep, iamAttachRolePolicyStep, iamDetachRolePolicyStep } from "../../src/providers/aws/iam";
 import { desiredTrustPolicy } from "../../integrations/aws/iam/role/update-trust-policy/params";
 import type { Params as TrustPolicyParams } from "../../integrations/aws/iam/role/update-trust-policy/params";
 import { iamTrustPolicyStep } from "../../src/providers/aws";
@@ -29,8 +29,6 @@ import { deleteRoleStep } from "../../integrations/aws/iam/role/delete-role/step
 import type { Params as DeleteRoleParams } from "../../integrations/aws/iam/role/delete-role/params";
 import { serviceLinkedRoleStep } from "../../integrations/aws/iam/role/create-service-linked-role/steps/service-linked-role";
 import type { Params as SlrParams } from "../../integrations/aws/iam/role/create-service-linked-role/params";
-import { tagsStep } from "../../integrations/aws/iam/role/tag-role/steps/tags";
-import type { Params as TagRoleParams } from "../../integrations/aws/iam/role/tag-role/params";
 import { auditStep } from "../../integrations/aws/iam/role/audit-unused-roles/steps/audit";
 import type { Params as AuditParams } from "../../integrations/aws/iam/role/audit-unused-roles/params";
 
@@ -62,29 +60,6 @@ function iamPlanCtx<P>(params: P, send: (command: Command) => unknown): StepCont
 function notFound(): Error {
   return Object.assign(new Error("not found"), { name: "NoSuchEntityException" });
 }
-
-describe("iam/role dry-run plan: create-role (iamRoleStep)", () => {
-  const TRUST_POLICY = { Version: "2012-10-17", Statement: [] };
-  test("role missing -> missing", async () => {
-    const ctx = iamPlanCtx({}, () => {
-      throw notFound();
-    });
-    const step = iamRoleStep<Record<string, never>>({
-      roleName: () => "r1",
-      trustPolicy: () => TRUST_POLICY,
-    });
-    expect(await step.check(ctx)).toBe("missing");
-  });
-
-  test("role already exists -> exists", async () => {
-    const ctx = iamPlanCtx({}, () => ({ Role: { RoleName: "r1" } }));
-    const step = iamRoleStep<Record<string, never>>({
-      roleName: () => "r1",
-      trustPolicy: () => TRUST_POLICY,
-    });
-    expect(await step.check(ctx)).toBe("exists");
-  });
-});
 
 describe("iam/role dry-run plan: delete-role", () => {
   const params: DeleteRoleParams = { ROLE_NAME: "r1", DELETE_INSTANCE_PROFILES_TOO: false };
@@ -223,15 +198,6 @@ describe("iam/role dry-run plan: create-service-linked-role", () => {
       Role: { RoleName: params.EXPECTED_ROLE_NAME, Path: "/aws-service-role/elasticbeanstalk.amazonaws.com/" },
     }));
     expect(await serviceLinkedRoleStep.check(ctx)).toBe("exists");
-  });
-});
-
-describe("iam/role dry-run plan: tag-role (always-reconcile)", () => {
-  const params: TagRoleParams = { ROLE_NAME: "r1", TAGS_JSON: JSON.stringify({ team: "core" }) };
-
-  test("check() always missing", async () => {
-    const ctx = iamPlanCtx(params, () => ({}));
-    expect(await tagsStep.check(ctx)).toBe("missing");
   });
 });
 

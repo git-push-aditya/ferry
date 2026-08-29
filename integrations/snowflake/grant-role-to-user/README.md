@@ -35,7 +35,7 @@ document their own "operates on an existing X" preconditions. If either is
 missing, the `GRANT ROLE ... TO USER ...` statement itself fails with a clear
 Snowflake error naming the missing object; that failure mode is treated as
 acceptable here rather than adding extra guard steps. Use
-`snowflake/create-role` first if the role doesn't exist yet.
+`CREATE ROLE` yourself first if the role doesn't exist yet.
 
 ## Reuses vs creates
 

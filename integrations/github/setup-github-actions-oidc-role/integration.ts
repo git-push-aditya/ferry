@@ -79,7 +79,7 @@ steps:
 Verified — confirmed the OIDC provider's client id list and the role's live
 trust policy match what was requested. Cannot confirm a real GitHub Actions
 run can successfully assume the role without dispatching one (see
-\`github/trigger-workflow-dispatch\` for a natural, optional follow-up).
+\`gh workflow run\` for a natural, optional follow-up).
 `;
   },
 });

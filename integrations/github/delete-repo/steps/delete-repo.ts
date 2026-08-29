@@ -3,7 +3,7 @@ import { githubClients, repoState } from "../../../../src/providers/github";
 import type { Params } from "../params";
 
 /**
- * Inverted create-or-skip, mirroring aws/s3/delete-empty-bucket's
+ * Inverted create-or-skip, mirroring the bucket-teardown steps'
  * deleteBucketStep: the target state is "the repo is gone", so check()
  * returns "missing" when the deletion still needs to happen (repo present)
  * and "exists" when it's already achieved (repo already gone — a re-run

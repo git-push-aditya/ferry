@@ -2,16 +2,10 @@ import { describe, expect, test } from "bun:test";
 import type { StepContext } from "../../src/core/define";
 import { launchStep } from "../../integrations/aws/ec2/launch-instance/steps/launch";
 import type { Params as LaunchParams } from "../../integrations/aws/ec2/launch-instance/params";
-import { terminateStep } from "../../integrations/aws/ec2/terminate-instance/steps/terminate";
-import type { Params as TerminateParams } from "../../integrations/aws/ec2/terminate-instance/params";
-import { stopStartStep } from "../../integrations/aws/ec2/stop-start-instance/steps/stop-start";
-import type { Params as StopStartParams } from "../../integrations/aws/ec2/stop-start-instance/params";
 import { groupStep } from "../../integrations/aws/ec2/create-security-group/steps/group";
 import type { Params as GroupParams } from "../../integrations/aws/ec2/create-security-group/params";
 import { reconcileRulesStep } from "../../integrations/aws/ec2/update-security-group-rules/steps/reconcile-rules";
 import type { Params as RulesParams } from "../../integrations/aws/ec2/update-security-group-rules/params";
-import { attachDetachStep } from "../../integrations/aws/ec2/attach-detach-ebs-volume/steps/attach-detach";
-import type { Params as AttachDetachParams } from "../../integrations/aws/ec2/attach-detach-ebs-volume/params";
 
 import { TEST_AWS_ACCOUNT } from "../helpers/test-aws-account";
 const ACCOUNT = TEST_AWS_ACCOUNT;
@@ -64,60 +58,6 @@ describe("ec2 dry-run plan: launch-instance", () => {
   });
 });
 
-describe("ec2 dry-run plan: terminate-instance", () => {
-  const params: TerminateParams = { INSTANCE_ID: "i-1", PRESERVE_VOLUME_CHECK: true };
-
-  test("running instance, no stranded volume -> missing", async () => {
-    const ctx = ec2PlanCtx(params, () => ({
-      Reservations: [{ Instances: [{ State: { Name: "running" }, BlockDeviceMappings: [] }] }],
-    }));
-    expect(await terminateStep.check(ctx)).toBe("missing");
-  });
-
-  test("already terminated -> exists", async () => {
-    const ctx = ec2PlanCtx(params, () => ({
-      Reservations: [{ Instances: [{ State: { Name: "terminated" } }] }],
-    }));
-    expect(await terminateStep.check(ctx)).toBe("exists");
-  });
-
-  test("running with preserved (DeleteOnTermination=false) volume -> conflict", async () => {
-    const ctx = ec2PlanCtx(params, () => ({
-      Reservations: [
-        {
-          Instances: [
-            { State: { Name: "running" }, BlockDeviceMappings: [{ Ebs: { DeleteOnTermination: false } }] },
-          ],
-        },
-      ],
-    }));
-    expect(await terminateStep.check(ctx)).toBe("conflict");
-  });
-});
-
-describe("ec2 dry-run plan: stop-start-instance", () => {
-  test("ACTION=stop, instance running -> missing", async () => {
-    const ctx = ec2PlanCtx<StopStartParams>({ INSTANCE_ID: "i-1", ACTION: "stop" }, () => ({
-      Reservations: [{ Instances: [{ State: { Name: "running" } }] }],
-    }));
-    expect(await stopStartStep.check(ctx)).toBe("missing");
-  });
-
-  test("ACTION=start, instance already running -> exists", async () => {
-    const ctx = ec2PlanCtx<StopStartParams>({ INSTANCE_ID: "i-1", ACTION: "start" }, () => ({
-      Reservations: [{ Instances: [{ State: { Name: "running" } }] }],
-    }));
-    expect(await stopStartStep.check(ctx)).toBe("exists");
-  });
-
-  test("mid-transition (pending) -> conflict", async () => {
-    const ctx = ec2PlanCtx<StopStartParams>({ INSTANCE_ID: "i-1", ACTION: "stop" }, () => ({
-      Reservations: [{ Instances: [{ State: { Name: "pending" } }] }],
-    }));
-    expect(await stopStartStep.check(ctx)).toBe("conflict");
-  });
-});
-
 describe("ec2 dry-run plan: create-security-group", () => {
   const params: GroupParams = {
     GROUP_NAME: "web-sg",
@@ -167,68 +107,3 @@ describe("ec2 dry-run plan: update-security-group-rules", () => {
   });
 });
 
-describe("ec2 dry-run plan: attach-detach-ebs-volume", () => {
-  const attachParams: AttachDetachParams = {
-    VOLUME_ID: "vol-1",
-    INSTANCE_ID: "i-1",
-    DEVICE: "/dev/sdf",
-    ACTION: "attach",
-    FORCE: false,
-  };
-  const detachParams: AttachDetachParams = { ...attachParams, ACTION: "detach" };
-
-  test("ACTION=attach, volume unattached -> missing", async () => {
-    const ctx = ec2PlanCtx(attachParams, (cmd) => {
-      if (cmd.constructor.name === "DescribeVolumesCommand") {
-        return { Volumes: [{ VolumeId: "vol-1", Attachments: [] }] };
-      }
-      return {};
-    });
-    expect(await attachDetachStep.check(ctx)).toBe("missing");
-  });
-
-  test("ACTION=attach, already attached with matching device -> exists", async () => {
-    const ctx = ec2PlanCtx(attachParams, (cmd) => {
-      if (cmd.constructor.name === "DescribeVolumesCommand") {
-        return { Volumes: [{ VolumeId: "vol-1", Attachments: [{ InstanceId: "i-1", Device: "/dev/sdf" }] }] };
-      }
-      return {};
-    });
-    expect(await attachDetachStep.check(ctx)).toBe("exists");
-  });
-
-  test("ACTION=detach, already detached -> exists", async () => {
-    const ctx = ec2PlanCtx(detachParams, (cmd) => {
-      if (cmd.constructor.name === "DescribeVolumesCommand") {
-        return { Volumes: [{ VolumeId: "vol-1", Attachments: [] }] };
-      }
-      return {};
-    });
-    expect(await attachDetachStep.check(ctx)).toBe("exists");
-  });
-
-  test("ACTION=detach, root volume of a running instance -> conflict", async () => {
-    const ctx = ec2PlanCtx(detachParams, (cmd) => {
-      if (cmd.constructor.name === "DescribeVolumesCommand") {
-        return { Volumes: [{ VolumeId: "vol-1", Attachments: [{ InstanceId: "i-1", Device: "/dev/sda1" }] }] };
-      }
-      if (cmd.constructor.name === "DescribeInstancesCommand") {
-        return {
-          Reservations: [
-            {
-              Instances: [
-                {
-                  State: { Name: "running" },
-                  RootDeviceName: "/dev/sda1",
-                  BlockDeviceMappings: [{ DeviceName: "/dev/sda1", Ebs: { VolumeId: "vol-1" } }],
-                },
-              ],
-            },
-          ],
-        };
-      }
-      return {};
-    });
-    expect(await attachDetachStep.check(ctx)).toBe("conflict");
-  });
-});

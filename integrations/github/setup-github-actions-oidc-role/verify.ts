@@ -7,7 +7,7 @@ import { githubOidcTrustPolicy, oidcProviderArn, OIDC_AUDIENCE, type Params } fr
  * Confirms the OIDC provider exists with the expected ClientIDList, and the
  * role's live trust policy matches field-for-field. Does NOT confirm a real
  * GitHub Actions run can successfully assume the role — that would require
- * dispatching a workflow (github/trigger-workflow-dispatch) configured to
+ * dispatching a workflow (`gh workflow run`) configured to
  * attempt the assumption, a natural but optional composition this task
  * does not build automatically (forcing a live workflow run on every apply
  * would be a surprising, possibly costly side effect).

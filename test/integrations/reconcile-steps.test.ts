@@ -11,16 +11,12 @@ import { transferStep } from "../../integrations/aws/s3/delete-bucket-with-trans
 import { deleteOldBucketStep } from "../../integrations/aws/s3/update-bucket-region/steps/delete-old-bucket";
 import type { Params as RegionParams } from "../../integrations/aws/s3/update-bucket-region/params";
 import type { Params as TransferParams } from "../../integrations/aws/s3/delete-bucket-with-transfer/params";
-import { deleteBucketStep } from "../../integrations/aws/s3/delete-empty-bucket/steps/delete-bucket";
-import type { Params as DeleteEmptyBucketParams } from "../../integrations/aws/s3/delete-empty-bucket/params";
 import { lifecycleStep } from "../../integrations/aws/s3/enable-bucket-lifecycle-rules/steps/lifecycle";
 import type { Params as LifecycleParams } from "../../integrations/aws/s3/enable-bucket-lifecycle-rules/params";
 import { loggingStep } from "../../integrations/aws/s3/enable-bucket-logging/steps/logging";
 import type { Params as LoggingParams } from "../../integrations/aws/s3/enable-bucket-logging/params";
 import { syncStep } from "../../integrations/aws/s3/sync-bucket-contents/steps/sync";
 import type { Params as SyncParams } from "../../integrations/aws/s3/sync-bucket-contents/params";
-import { tagsStep } from "../../integrations/aws/s3/tag-bucket/steps/tags";
-import type { Params as TagBucketParams } from "../../integrations/aws/s3/tag-bucket/params";
 import { descIntegrationStep } from "../../integrations/snowflake/create-storage-s3-integration/steps/desc-integration";
 import { storageIntegrationStep } from "../../integrations/snowflake/create-storage-s3-integration/steps/storage-integration";
 import { trustPolicyStep } from "../../integrations/snowflake/create-storage-s3-integration/steps/trust-policy";
@@ -268,118 +264,6 @@ function awsError(name: string, httpStatusCode: number): Error {
   return Object.assign(new Error(name), { name, $metadata: { httpStatusCode } });
 }
 
-const TAG_BUCKET_PARAMS: TagBucketParams = {
-  S3_BUCKET_NAME: "ferry-tagged-bucket",
-  TAGS_JSON: "",
-};
-
-describe("bucket-tags (aws/s3/tag-bucket)", () => {
-  test("TAGS_JSON unset leaves the bucket untouched — no API call at all", async () => {
-    const sent: string[] = [];
-    const ctx = iamCtx(TAG_BUCKET_PARAMS, {}, (command) => {
-      sent.push(command.constructor.name);
-      return {};
-    });
-
-    const outputs = await tagsStep.reconcile!(ctx);
-
-    expect(sent).toEqual([]);
-    expect(outputs).toEqual({});
-  });
-
-  test("a desired tag set with no prior tags sets it and captures 'no prior tags'", async () => {
-    const sent: { name: string; input: Record<string, unknown> }[] = [];
-    const ctx = iamCtx(
-      { ...TAG_BUCKET_PARAMS, TAGS_JSON: '{"env":"prod"}' },
-      {},
-      (command) => {
-        sent.push({ name: command.constructor.name, input: command.input });
-        return command.constructor.name === "GetBucketTaggingCommand"
-          ? awsError("NoSuchTagSet", 404)
-          : {};
-      },
-    );
-
-    const outputs = await tagsStep.reconcile!(ctx);
-
-    expect(sent.map((s) => s.name)).toEqual(["GetBucketTaggingCommand", "PutBucketTaggingCommand"]);
-    expect(sent[1]!.input).toEqual({
-      Bucket: "ferry-tagged-bucket",
-      Tagging: { TagSet: [{ Key: "env", Value: "prod" }] },
-    });
-    expect(outputs).toEqual({ hadPriorTags: false, priorTagSetJson: "" });
-  });
-
-  test("TAGS_JSON={} clears every tag via DeleteBucketTagging, not an empty Put", async () => {
-    const sent: { name: string; input: Record<string, unknown> }[] = [];
-    const ctx = iamCtx({ ...TAG_BUCKET_PARAMS, TAGS_JSON: "{}" }, {}, (command) => {
-      sent.push({ name: command.constructor.name, input: command.input });
-      return command.constructor.name === "GetBucketTaggingCommand"
-        ? { TagSet: [{ Key: "old", Value: "tag" }] }
-        : {};
-    });
-
-    await tagsStep.reconcile!(ctx);
-
-    expect(sent.map((s) => s.name)).toEqual([
-      "GetBucketTaggingCommand",
-      "DeleteBucketTaggingCommand",
-    ]);
-  });
-
-  test("rollback deletes the tags when there were none before", async () => {
-    const sent: { name: string; input: Record<string, unknown> }[] = [];
-    const ctx = iamCtx(
-      TAG_BUCKET_PARAMS,
-      { hadPriorTags: false, priorTagSetJson: "" },
-      (command) => {
-        sent.push({ name: command.constructor.name, input: command.input });
-        return {};
-      },
-    );
-
-    await tagsStep.rollback(ctx);
-
-    expect(sent).toEqual([
-      { name: "DeleteBucketTaggingCommand", input: { Bucket: "ferry-tagged-bucket" } },
-    ]);
-  });
-
-  test("rollback restores the prior tag set exactly when one existed before", async () => {
-    const prior = [{ Key: "env", Value: "staging" }];
-    const sent: { name: string; input: Record<string, unknown> }[] = [];
-    const ctx = iamCtx(
-      TAG_BUCKET_PARAMS,
-      { hadPriorTags: true, priorTagSetJson: JSON.stringify(prior) },
-      (command) => {
-        sent.push({ name: command.constructor.name, input: command.input });
-        return {};
-      },
-    );
-
-    await tagsStep.rollback(ctx);
-
-    expect(sent).toEqual([
-      {
-        name: "PutBucketTaggingCommand",
-        input: { Bucket: "ferry-tagged-bucket", Tagging: { TagSet: prior } },
-      },
-    ]);
-  });
-
-  test("rollback does nothing when tags were never touched this run", async () => {
-    const sent: string[] = [];
-    const ctx = iamCtx(TAG_BUCKET_PARAMS, {}, (command) => {
-      sent.push(command.constructor.name);
-      return {};
-    });
-
-    await tagsStep.rollback(ctx);
-
-    expect(sent).toEqual([]);
-  });
-});
-
 const LIFECYCLE_PARAMS: LifecycleParams = {
   S3_BUCKET_NAME: "ferry-lifecycle-bucket",
   LIFECYCLE_RULES_JSON: "",
@@ -538,84 +422,6 @@ describe("bucket-logging (aws/s3/enable-bucket-logging)", () => {
         input: { Bucket: "ferry-logged-bucket", BucketLoggingStatus: { LoggingEnabled: prior } },
       },
     ]);
-  });
-});
-
-const DELETE_EMPTY_BUCKET_PARAMS: DeleteEmptyBucketParams = {
-  S3_BUCKET_NAME: "ferry-doomed-bucket",
-};
-
-describe("delete-empty-bucket (aws/s3/delete-empty-bucket)", () => {
-  test("a bucket already gone reads as 'exists' — the target state is already achieved", async () => {
-    const ctx = iamCtx(DELETE_EMPTY_BUCKET_PARAMS, {}, () =>
-      Object.assign(new Error("NotFound"), { name: "NotFound", $metadata: { httpStatusCode: 404 } }),
-    );
-    expect(await deleteBucketStep.check(ctx)).toBe("exists");
-  });
-
-  test("a bucket owned by another account is 'conflict'", async () => {
-    const ctx = iamCtx(DELETE_EMPTY_BUCKET_PARAMS, {}, () =>
-      Object.assign(new Error("Forbidden"), { name: "Forbidden", $metadata: { httpStatusCode: 403 } }),
-    );
-    expect(await deleteBucketStep.check(ctx)).toBe("conflict");
-  });
-
-  test("a present, non-empty bucket is 'conflict' — this step never empties it", async () => {
-    const ctx = iamCtx(DELETE_EMPTY_BUCKET_PARAMS, {}, (command) => {
-      if (command.constructor.name === "HeadBucketCommand") return {};
-      if (command.constructor.name === "ListObjectsV2Command") return { Contents: [{ Key: "a" }] };
-      return {};
-    });
-    expect(await deleteBucketStep.check(ctx)).toBe("conflict");
-  });
-
-  test("a present, empty bucket is 'missing' — the delete still needs to happen", async () => {
-    const ctx = iamCtx(DELETE_EMPTY_BUCKET_PARAMS, {}, (command) => {
-      if (command.constructor.name === "HeadBucketCommand") return {};
-      if (command.constructor.name === "ListObjectsV2Command") return { Contents: [] };
-      if (command.constructor.name === "ListObjectVersionsCommand") {
-        return { Versions: [], DeleteMarkers: [] };
-      }
-      return {};
-    });
-    expect(await deleteBucketStep.check(ctx)).toBe("missing");
-  });
-
-  test("create() deletes the bucket", async () => {
-    const sent: string[] = [];
-    const ctx = iamCtx(DELETE_EMPTY_BUCKET_PARAMS, {}, (command) => {
-      sent.push(command.constructor.name);
-      return {};
-    });
-
-    const outputs = await deleteBucketStep.create!(ctx);
-
-    expect(sent).toEqual(["DeleteBucketCommand"]);
-    expect(outputs).toEqual({ bucketDeletedThisRun: true });
-  });
-
-  test("rollback recreates an empty bucket when this run deleted it", async () => {
-    const sent: string[] = [];
-    const ctx = iamCtx(DELETE_EMPTY_BUCKET_PARAMS, { bucketDeletedThisRun: true }, (command) => {
-      sent.push(command.constructor.name);
-      return {};
-    });
-
-    await deleteBucketStep.rollback(ctx);
-
-    expect(sent).toEqual(["CreateBucketCommand"]);
-  });
-
-  test("rollback does nothing when this run did not delete the bucket (it was already gone)", async () => {
-    const sent: string[] = [];
-    const ctx = iamCtx(DELETE_EMPTY_BUCKET_PARAMS, {}, (command) => {
-      sent.push(command.constructor.name);
-      return {};
-    });
-
-    await deleteBucketStep.rollback(ctx);
-
-    expect(sent).toEqual([]);
   });
 });
 

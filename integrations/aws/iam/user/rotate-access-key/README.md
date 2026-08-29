@@ -67,7 +67,7 @@ key's secret again.
   does this automatically if a later step in the same run fails).
 - **Phase B, deactivate step, is reversible** — `UpdateAccessKey` can flip
   the old key back to `Active` at any time (this is exactly what
-  `aws/iam/user/deactivate-access-key`'s own rollback does, and this
+  the `iamAccessKeyStatusStep` factory's own rollback does, and this
   integration reuses the same reasoning).
 - **Phase B, delete step, is NOT reversible.** Once the old key is deleted,
   it is gone forever. If rollback runs after delete has already happened, it
